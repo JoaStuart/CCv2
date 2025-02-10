@@ -1,0 +1,4 @@
+pyinstaller>=6.9.0
+pygame==2.6.1
+pyautogui==0.9.54
+pyqt6==6.8.1
