@@ -1,51 +1,41 @@
 import os
-import pyautogui
 
 import constants
-from lightmap import Lightmap
+from lighting.lightmap import Lightmap
 
 
 def create_lightmap() -> None:
     name = input("Name of the new Lightmap: ")
 
-    input("Move your mouse to the top-left color of the first grid and press [ENTER]")
-    left_top = pyautogui.position()
+    file = input("Where is the Kaskobi-Style palette stored?\n> ")
 
-    input(
-        "Move your mouse to the bottom-right color of the first grid and press [ENTER]"
-    )
-    left_bottom = pyautogui.position()
+    with open(file, "r") as rf:
+        palette = rf.read()
 
-    input("Move your mouse to the top-left color of the second grid and press [ENTER]")
-    right_top = pyautogui.position()
+    lm = Lightmap(name.strip())
 
-    input(
-        "Move your mouse to the bottom-right color of the second grid and press [ENTER]"
-    )
-    right_bottom = pyautogui.position()
+    for p in palette.split(";"):
+        p = p.strip()
 
-    lightmap = Lightmap(name.strip())
+        if len(p) == 0:
+            continue
 
-    left_dist_x = left_bottom.x - left_top.x
-    left_dist_y = left_bottom.y - left_top.y
-    _get_colors(lightmap, left_top, left_dist_x, left_dist_y)
+        key, col = p.split(", ")
 
-    right_dist_x = right_bottom.x - right_top.x
-    right_dist_y = right_bottom.y - right_top.y
-    _get_colors(lightmap, right_top, right_dist_x, right_dist_y, 0x40)
+        ikey = int(key)
+        pcol = col.split(" ")
+        if len(pcol) != 3:
+            continue
+
+        icol = (
+            int(pcol[0]),
+            int(pcol[1]),
+            int(pcol[2]),
+        )
+
+        lm[ikey] = icol
+
+    ver = Lightmap.versions()[-1]
 
     with open(os.path.join(constants.LIGHTMAPS, name), "wb") as wf:
-        wf.write(Lightmap.versions()[-1].dump(lightmap))
-
-
-def _get_colors(
-    lightmap: Lightmap, top: pyautogui.Point, dist_x: int, dist_y: int, start: int = 0
-) -> None:
-    for i in range(8):
-        for j in range(8):
-            rgb = pyautogui.pixel(
-                int(top.x + (dist_x / 8) * i),
-                int(top.y + (dist_y / 8) * j),
-            )
-
-            lightmap[start + i + j * 8] = rgb
+        wf.write(ver.dump(lm))

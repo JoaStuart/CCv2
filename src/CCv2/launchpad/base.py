@@ -5,6 +5,8 @@ import time
 from typing import Callable, Optional
 import pygame.midi as midi
 
+from daemon_thread import DaemonThread
+from lighting.keyframes import PersistentKeyframes
 import logger
 
 
@@ -53,11 +55,7 @@ class Launchpad(abc.ABC):
         for i in range(midi.get_count()):
             Launchpad.load(i)
 
-        threading.Thread(
-            target=Launchpad.update_loop,
-            name="MidiChecker",
-            daemon=True,
-        ).start()
+        LaunchpadChecker()  # Start the checker
 
     @staticmethod
     def load(index: int) -> None:
@@ -78,19 +76,6 @@ class Launchpad(abc.ABC):
                 Launchpad.OUTPUTS.append(lp := tpe(index))
                 lp.send_welcome_messages()
                 logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
-
-    @staticmethod
-    def update_loop() -> None:
-        last_count = midi.get_count()
-
-        while True:
-            time.sleep(0.5)
-            new_count = midi.get_count()
-            if new_count > last_count:
-                for i in range(last_count, new_count):
-                    Launchpad.load(i)
-
-                last_count = new_count
 
     @staticmethod
     def broadcast_light(cmd: int, pos: tuple[int, int], vel: int) -> None:
@@ -124,41 +109,85 @@ class Launchpad(abc.ABC):
         return []
 
 
+class LaunchpadChecker(DaemonThread):
+    def __init__(self) -> None:
+        self._last_count = midi.get_count()
+
+        super().__init__("MidiChecker")
+
+    def thread_loop(self) -> None:
+        time.sleep(0.5)
+        new_count = midi.get_count()
+        if new_count > self._last_count:
+            for i in range(self._last_count, new_count):
+                Launchpad.load(i)
+
+            self._last_count = new_count
+
+
 type LaunchpadCallback = Callable[[int, int, int, int], None]
 
 
-class LaunchpadIn(Launchpad):
+class LaunchpadRouter:
+    def __init__(self, lp: Launchpad) -> None:
+        self._launchpad = lp
+        self._active_buttons: dict[tuple[int, int], threading.Event] = {}
+
+    def _note_on(self, note: tuple[int, int], vel: int) -> None:
+        from lighting.lightmanager import LightManager
+
+        self._note_off(note)
+
+        e = threading.Event()
+        self._active_buttons[note] = e
+        kf = PersistentKeyframes(e)
+        kf.append({note: vel})
+
+        LightManager().play_raw(kf)
+
+    def _note_off(self, note: tuple[int, int]) -> None:
+        ln = self._active_buttons.get(note, None)
+        if ln:
+            ln.set()
+
+    def route(self, cmd: int, a0: int, a1: int, _: int) -> None:
+        cnc = cmd & 0xF0
+        if cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON:
+            note = self._launchpad.midi_to_xy(a0, cmd)
+
+            if a1 == 0:
+                self._note_off(note)
+            else:
+                self._note_on(note, a1)
+        elif cnc == Launchpad.NOTE_OFF:
+            self._note_off(self._launchpad.midi_to_xy(a0, cmd))
+
+
+class LaunchpadIn(Launchpad, DaemonThread):
     def __init__(self, index: int) -> None:
         self._in = midi.Input(index)
-        self._callback = None
+        self._callback = LaunchpadRouter(self).route
 
-        threading.Thread(
-            target=self._input_reader, name="MidiInput", daemon=True
-        ).start()
+        super().__init__("MidiReader-%d" % index)
 
     @property
     def callback(self) -> Optional[LaunchpadCallback]:
         return self._callback
 
     @callback.setter
-    def callback(self, callback: LaunchpadCallback) -> None:
+    def callback(self, callback: Optional[LaunchpadCallback]) -> None:
         self._callback = callback
 
-    def _input_reader(self) -> None:
-        while True:
-            messages = self._in.read(1)
-            if len(messages) == 0:
-                continue
+    def thread_loop(self) -> None:
+        messages = self._in.read(1)
+        if len(messages) == 0:
+            return
 
-            data = messages[0][0]
-            assert isinstance(data, list)
+        data = messages[0][0]
+        assert isinstance(data, list)
 
-            if self._callback:
-                self._callback(*data)
-
-            # TEMP: Echo back input
-            for o in Launchpad.OUTPUTS:
-                o.send(data)
+        if self._callback:
+            self._callback(*data)
 
 
 class LaunchpadOut(Launchpad):

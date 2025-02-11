@@ -1,6 +1,6 @@
+import abc
 import threading
-import time
-from typing import Optional
+from daemon_thread import DaemonThread
 from launchpad.base import Launchpad
 from lighting.keyframes import Keyframes
 from singleton import singleton
@@ -9,86 +9,100 @@ type Kf = dict[tuple[int, int], int]
 
 
 @singleton
-class LightManager:
+class LightManager(DaemonThread):
     def __init__(self) -> None:
-        self._active_frames: list[Optional[tuple[Keyframes, threading.Event]]] = []
+        self._active_frames: list[tuple[Keyframes, threading.Event]] = []
         self._current_launchpad: dict[tuple[int, int], int] = {}
         self._new_frame_notifier = threading.Event()
+        self._receiver: list[LightReceiver] = []
 
-        threading.Thread(
-            target=self._lighting_thread,
-            name="LightManager",
-            daemon=True,
-        ).start()
+        super().__init__("LightManager")
 
-    def play(self, name: str) -> threading.Event:
+    def play_raw(self, kf: Keyframes) -> threading.Event:
         finish_event = threading.Event()
 
-        keyframes = Keyframes.FRAME_CACHE.get(name, None)
-        if keyframes is None:
-            finish_event.set()
-        else:
-            data = (keyframes, finish_event)
-            for i in range(len(self._active_frames)):
-                if self._active_frames[i] is None:
-                    self._active_frames[i] = data
-                    break
-            else:
-                self._active_frames.append(data)
-            self._new_frame_notifier.set()
+        self._active_frames.append((kf, finish_event))
+        self._new_frame_notifier.set()
 
         return finish_event
 
+    def play(self, name: str) -> threading.Event:
+        keyframes = Keyframes.FRAME_CACHE.get(name, None)
+        if keyframes is None:
+            sevent = threading.Event()
+            sevent.set()
+            return sevent
+
+        return self.play_raw(keyframes)
+
     def _get_shortest_wait(self) -> float:
-        return min([d[0].next_wait() for d in self._active_frames if d is not None])
+        return min([d[0].next_wait() for d in self._active_frames])
 
-    def _lighting_thread(self) -> None:
-        while True:
-            if len([f for f in self._active_frames if f is not None]) == 0:
-                self._new_frame_notifier.wait()
-                self._new_frame_notifier.clear()
-            else:
-                wait = self._get_shortest_wait()
-                if wait > 0:
-                    time.sleep(wait)
+    def thread_loop(self) -> None:
+        if len(self._active_frames) == 0:
+            self._new_frame_notifier.clear()
+            self._new_frame_notifier.wait()
+        else:
+            wait = self._get_shortest_wait()
+            if wait > 0:
+                self._new_frame_notifier.wait(wait)
 
-            self._handle_frame()
+        self._handle_frame()
 
     def _handle_frame(self) -> None:
-        write_buffer: Kf = {}
+        next_screen: Kf = {}
+        finished_frames: list[tuple[Keyframes, threading.Event]] = []
 
-        for i in range(len(self._active_frames)):
-            d = self._active_frames[i]
-            if d is None:
-                continue
-
-            kf, end = d
+        for kf, end in self._active_frames:
             if kf.next_wait() > 0:
-                continue
+                frame = kf.last()
 
-            frame = kf.next()
+                if not frame:
+                    print("No last frame")
+                    continue
+            else:
+                frame = kf.next()
 
             if frame is None:
-                self._active_frames[i] = None
+                finished_frames.append((kf, end))
                 end.set()
                 continue
 
-            self._draw_frame(frame, write_buffer)
+            self._draw_frame(frame, next_screen)
+
+        for f in finished_frames:
+            self._active_frames.remove(f)
+
+        write_buffer: Kf = {}
+        for k in self._current_launchpad.keys() | next_screen.keys():
+            if self._current_launchpad.get(k, 0) != next_screen.get(k, 0):
+                write_buffer[k] = next_screen.get(k, 0)
 
         self._broadcast_buffer(write_buffer)
+        self._current_launchpad = next_screen
 
-    def _draw_frame(self, frame: Kf, write_buffer: Kf) -> None:
+    def _draw_frame(self, frame: Kf, next_screen: Kf) -> None:
         for p, v in frame.items():
-            if self._current_launchpad.get(p, None) == v:
-                continue
+            next_screen[p] = v
 
-            write_buffer[p] = v
+    def add_light_receiver(self, receiver: "LightReceiver") -> None:
+        self._receiver.append(receiver)
 
     def _broadcast_buffer(self, write_buffer: Kf) -> None:
         for pos, vel in write_buffer.items():
             Launchpad.broadcast_light(
                 Launchpad.NOTE_ON | Launchpad.LIGHT_STATIC, pos, vel
             )
+
+            for r in self._receiver:
+                r[pos] = vel
+
             # TODO:
             # - Make the Keyframes be able to set the type of light to send (STATIC, FLASHING, PULSING)
             # - Make the type of launchpad be able to select the channel for each type of light
+
+
+class LightReceiver(abc.ABC):
+    @abc.abstractmethod
+    def __setitem__(self, pos: tuple[int, int], col: int) -> None:
+        pass

@@ -64,6 +64,9 @@ class Lightmap:
     def items(self) -> ItemsView[int, tuple[int, int, int]]:
         return self._mappings.items()
 
+    def __str__(self) -> str:
+        return str(self._mappings)
+
 
 class LightmapLoader(abc.ABC):
     @abc.abstractmethod

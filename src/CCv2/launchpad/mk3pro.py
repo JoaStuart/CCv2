@@ -15,10 +15,10 @@ class LaunchpadMk3Pro(Launchpad):
                 return midi % 4 + 4, 25 - midi // 4 - 1
 
             if midi >= 0x6C and midi <= 0x73:  # Left side register
-                return -1, midi - 0x6A
+                return -1, midi - 0x6C
 
             if midi >= 0x64 and midi <= 0x6B:  # Right side register
-                return 8, midi - 0x62
+                return 8, midi - 0x64
 
             if midi >= 0x74 and midi <= 0x7B:  # Upper bottom row
                 return midi - 0x74, 8
@@ -45,18 +45,18 @@ class LaunchpadMk3Pro(Launchpad):
         if y == -1:
             return 90 + x + 1, mode + self.CC_ON - self.NOTE_ON
         elif y >= 0 and y <= 7:
-            if x == -1:
-                return 107 + y, mode
-            elif x == 8:
-                return 99 + y, mode
+            if x == -1:  # Left register
+                return 108 + y, mode
+            elif x == 8:  # Right register
+                return 100 + y, mode
             elif x < 4:
                 return 68 - 4 * y + (x - 4), mode
             else:
                 return (96 - (4 * y)) + (x - 4), mode
-        elif y == 8:
-            return 115 + x, mode
-        elif y == 9:
-            return 11 + x, mode
+        elif y == 8:  # Upper bottom row
+            return 116 + x, mode
+        elif y == 9:  # Lower bottom row
+            return 12 + x, mode
         else:
             return 0, mode
 

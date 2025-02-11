@@ -1,38 +1,41 @@
 import sys
+from daemon_thread import DaemonThread
 from launchpad.base import Launchpad
 import argparse
 
 from lighting.keyframes import Keyframes
-from lighting.lightmanager import LightManager
-from lightmap import Lightmap
+from lighting.lightmap import Lightmap
 import logger
 from scripts.lightmap import create_lightmap
-
-if __name__ != "__main__":
-    print("Try executing this file directly!")
-    exit(1)
-
-parser = argparse.ArgumentParser("CC/v2", description="CoverCreator version 2")
-parser.add_argument("--lightmap", "-l", action="store_true")
-parser.add_argument("--verbose", action="store_true")
-
-args = parser.parse_args(sys.argv[1:])
-
-logger.init(args.verbose)
-
-if args.lightmap:
-    create_lightmap()
-    exit(0)
+from ui.main_ui import open_and_run
 
 
-# Open and load thigns
-Lightmap.load_all()
-Launchpad.open_all()
-Keyframes.load_internal()
+def main() -> int:
+    parser = argparse.ArgumentParser("CC/v2", description="CoverCreator version 2")
+    parser.add_argument("--lightmap", "-l", action="store_true")
+    parser.add_argument("--verbose", action="store_true")
 
-input("")
-LightManager().play("test").wait()
+    args = parser.parse_args(sys.argv[1:])
 
-input("")
+    logger.init(args.verbose)
 
-Launchpad.broadcast_clear()
+    if args.lightmap:
+        create_lightmap()
+        sys.exit(0)
+
+    # Open and load thigns
+    Lightmap.load_all()
+    Launchpad.open_all()
+    Keyframes.load_internal()
+
+    return open_and_run()
+
+
+if __name__ == "__main__":
+    code = main()  # Run application
+
+    logger.info("Stopping daemon threads...")
+    DaemonThread.clean_all()  # Stop daemon threads
+    Launchpad.broadcast_clear()
+    logger.info("----- End of output -----")
+    sys.exit(code)  # Exit application

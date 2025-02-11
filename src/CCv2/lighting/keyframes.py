@@ -2,6 +2,7 @@ import abc
 from io import BytesIO
 import os
 import struct
+import threading
 import time
 from typing import Optional
 
@@ -56,6 +57,12 @@ class Keyframes:
         self._current_frame += 1
         return frames
 
+    def last(self) -> Optional[Kf]:
+        if self._current_frame == 0:
+            return None
+
+        return self._keyframes[self._current_frame - 1]
+
     @property
     def frame(self) -> int:
         return self._current_frame
@@ -77,6 +84,22 @@ class Keyframes:
 
     def append(self, frame: Kf) -> None:
         self._keyframes.append(frame)
+
+
+class PersistentKeyframes(Keyframes):
+    def __init__(self, finish_event: threading.Event) -> None:
+        super().__init__()
+        self._finish_event = finish_event
+        self._anim_time = 0.1
+
+    def next(self) -> dict[tuple[int, int], int] | None:
+        if self._finish_event.is_set():
+            return None
+
+        if self._current_frame >= len(self._keyframes):
+            self._current_frame %= len(self._keyframes)
+
+        return super().next()
 
 
 class KeyframesLoader(abc.ABC):
