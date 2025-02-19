@@ -8,9 +8,11 @@ from typing import Optional
 
 import constants
 import logger
+from ptypes import int2
+from utils.color import col
 
 
-type Kf = dict[tuple[int, int], int]
+type Kf = dict[int2, col]
 
 
 class Keyframes:
@@ -92,7 +94,7 @@ class PersistentKeyframes(Keyframes):
         self._finish_event = finish_event
         self._anim_time = 0.1
 
-    def next(self) -> dict[tuple[int, int], int] | None:
+    def next(self) -> dict[tuple[int, int], col] | None:
         if self._finish_event.is_set():
             return None
 
@@ -136,10 +138,11 @@ class KeyframesV1(KeyframesLoader):
 
         for _ in range(num_frames):
             num_pairs = struct.unpack("I", f.read(4))[0]
-            d: dict[tuple[int, int], int] = {}
+            d: dict[tuple[int, int], col] = {}
             for _ in range(num_pairs):
-                packed_key, value = struct.unpack("BB", f.read(2))
-                d[self._unpack_key(packed_key)] = value
+                packed_key = struct.unpack("B", f.read(1))[0]
+                c = struct.unpack("BBB", f.read(3))
+                d[self._unpack_key(packed_key)] = col(*c)
             keyframes.append(d)
 
         return keyframes
@@ -149,12 +152,11 @@ class KeyframesV1(KeyframesLoader):
 
         data.append(struct.pack("f", keyframes.anim_time))
         data.append(struct.pack("I", keyframes.num_frames()))
-        print(f"Dumping {keyframes.num_frames()} frames...")
 
         while (d := keyframes.next()) is not None:
-            print("Dumping frame")
             data.append(struct.pack("I", len(d)))
             for (x, y), value in d.items():
-                data.append(struct.pack("BB", self._pack_key(x, y), value))
+                data.append(struct.pack("B", self._pack_key(x, y)))
+                data.append(struct.pack("BBB", *value))
 
         return b"".join(data)

@@ -3,20 +3,26 @@ import threading
 from daemon_thread import DaemonThread
 from launchpad.base import Launchpad
 from lighting.keyframes import Keyframes
+from ptypes import int2
 from singleton import singleton
+from utils.color import col
 
-type Kf = dict[tuple[int, int], int]
+type Kf = dict[int2, col]
 
 
 @singleton
 class LightManager(DaemonThread):
     def __init__(self) -> None:
         self._active_frames: list[tuple[Keyframes, threading.Event]] = []
-        self._current_launchpad: dict[tuple[int, int], int] = {}
+        self._current_launchpad: Kf = {}
+        self._static_launchpad: Kf = {}
         self._new_frame_notifier = threading.Event()
         self._receiver: list[LightReceiver] = []
 
         super().__init__("LightManager")
+
+    def static(self, x: int, y: int, c: col) -> None:
+        self._static_launchpad[(x, y)] = c
 
     def play_raw(self, kf: Keyframes) -> threading.Event:
         finish_event = threading.Event()
@@ -76,7 +82,7 @@ class LightManager(DaemonThread):
         write_buffer: Kf = {}
         for k in self._current_launchpad.keys() | next_screen.keys():
             if self._current_launchpad.get(k, 0) != next_screen.get(k, 0):
-                write_buffer[k] = next_screen.get(k, 0)
+                write_buffer[k] = next_screen.get(k, col(0, 0, 0))
 
         self._broadcast_buffer(write_buffer)
         self._current_launchpad = next_screen
@@ -104,5 +110,5 @@ class LightManager(DaemonThread):
 
 class LightReceiver(abc.ABC):
     @abc.abstractmethod
-    def __setitem__(self, pos: tuple[int, int], col: int) -> None:
+    def __setitem__(self, pos: int2, c: col) -> None:
         pass

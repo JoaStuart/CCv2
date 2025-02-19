@@ -1,17 +1,15 @@
 import abc
-import threading
-from typing import TYPE_CHECKING
-from lighting.keyframes import PersistentKeyframes
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from launchpad.base import LaunchpadIn
 
 
-class LaunchpadRouter(abc.ABC):
+class LaunchpadRouter:
     def __init__(self, lp: "LaunchpadIn") -> None:
         self._lp = lp
 
-    def route(self, cmd: int, a0: int, a1: int, a2: int) -> None:
+    def route(self, cmd: int, a0: int, a1: int, _: int) -> None:
         from launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
@@ -25,33 +23,34 @@ class LaunchpadRouter(abc.ABC):
         elif cnc == Launchpad.NOTE_OFF:
             self.note_off(*self._lp.midi_to_xy(a0, cmd))
 
+    def note_on(self, x: int, y: int, _: int) -> None:
+        LaunchpadReceiver.route_on(x, y)
+
+    def note_off(self, x: int, y: int) -> None:
+        LaunchpadReceiver.route_off(x, y)
+
+
+class LaunchpadReceiver(abc.ABC):
+    ACTIVE_RECEIVER: "Optional[LaunchpadReceiver]" = None
+
+    @staticmethod
+    def request_input(target: "LaunchpadReceiver") -> None:
+        LaunchpadReceiver.ACTIVE_RECEIVER = target
+
+    @staticmethod
+    def route_on(x: int, y: int) -> None:
+        if r := LaunchpadReceiver.ACTIVE_RECEIVER:
+            r.note_on(x, y)
+
+    @staticmethod
+    def route_off(x: int, y: int) -> None:
+        if r := LaunchpadReceiver.ACTIVE_RECEIVER:
+            r.note_off(x, y)
+
     @abc.abstractmethod
-    def note_on(self, x: int, y: int, vel: int) -> None:
+    def note_on(self, x: int, y: int) -> None:
         pass
 
     @abc.abstractmethod
     def note_off(self, x: int, y: int) -> None:
         pass
-
-
-class DefaultLaunchpadRouter(LaunchpadRouter):
-    def __init__(self, lp: "LaunchpadIn") -> None:
-        super().__init__(lp)
-        self._active_buttons: dict[tuple[int, int], threading.Event] = {}
-
-    def note_on(self, x: int, y: int, vel: int) -> None:
-        from lighting.lightmanager import LightManager
-
-        self.note_off(x, y)
-
-        e = threading.Event()
-        self._active_buttons[(x, y)] = e
-        kf = PersistentKeyframes(e)
-        kf.append({(x, y): vel})
-
-        LightManager().play_raw(kf)
-
-    def note_off(self, x: int, y: int) -> None:
-        ln = self._active_buttons.get((x, y), None)
-        if ln:
-            ln.set()

@@ -4,6 +4,7 @@ from typing import ItemsView
 
 import constants
 import logger
+from utils.color import col
 
 
 class Lightmap:
@@ -36,24 +37,25 @@ class Lightmap:
             Lightmap.MAPS[lightmap.name] = lightmap
 
     def __init__(self, name: str) -> None:
-        self._mappings: dict[int, tuple[int, int, int]] = {}
+        self._mappings: dict[int, col] = {}
         self._name: str = name
 
     @property
     def name(self) -> str:
         return self._name
 
-    def __setitem__(self, key: int, val: tuple[int, int, int]) -> None:
-        r, g, b = val
+    def __setitem__(self, key: int, val: col) -> None:
+        self._mappings[key] = val
 
-        self._mappings[key] = (
-            self._normalize(r),
-            self._normalize(g),
-            self._normalize(b),
-        )
+    def __getitem__(self, key: int) -> col:
+        return self._mappings.get(key, col(255, 255, 255))
 
-    def __getitem__(self, key: int) -> tuple[int, int, int]:
-        return self._mappings.get(key, (255, 255, 255))
+    def vel(self, c: col) -> int:
+        for k, v in self._mappings.items():
+            if v == c:
+                return k
+
+        return 0
 
     def _normalize(self, c: int) -> int:
         return max(0, min(c, 255))
@@ -61,7 +63,7 @@ class Lightmap:
     def __len__(self) -> int:
         return len(self._mappings)
 
-    def items(self) -> ItemsView[int, tuple[int, int, int]]:
+    def items(self) -> ItemsView[int, col]:
         return self._mappings.items()
 
     def __str__(self) -> str:
@@ -88,7 +90,7 @@ class LightmapV1(LightmapLoader):
 
     def load(self, lightmap: Lightmap, data: bytes) -> None:
         for i in range(2, len(data), 4):
-            lightmap[data[i]] = (
+            lightmap[data[i]] = col(
                 data[i + 1],
                 data[i + 2],
                 data[i + 3],
@@ -102,9 +104,9 @@ class LightmapV1(LightmapLoader):
         data_idx = 2
         for k, v in lightmap.items():
             data[data_idx] = k
-            data[data_idx + 1] = v[0]
-            data[data_idx + 2] = v[1]
-            data[data_idx + 3] = v[2]
+            data[data_idx + 1] = v.r
+            data[data_idx + 2] = v.g
+            data[data_idx + 3] = v.b
 
             data_idx += 4
 

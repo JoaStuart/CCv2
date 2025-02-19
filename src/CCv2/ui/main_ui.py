@@ -1,19 +1,16 @@
 import abc
-from typing import Optional
+from typing import Callable, Optional
 import pygame
 import pygame._sdl2.video
 
 from launchpad.base import Launchpad
 from lighting.lightmanager import LightManager, LightReceiver
-from lighting.lightmap import Lightmap
+from ptypes import int2, int3, int4
 from singleton import singleton
+from utils.color import col
 
 pygame.init()
-
-
-type int2 = tuple[int, int]
-type int3 = tuple[int, int, int]
-type int4 = tuple[int, int, int, int]
+pygame.font.init()
 
 
 @singleton
@@ -22,16 +19,18 @@ class WindowManager:
         self._active_windows: list[Window] = []
         self._running: bool = True
 
-    def open(self, *windows: "Window") -> None:
+    def open(self, *windows: "Window", show: bool = True) -> None:
         for w in windows:
             self._active_windows.append(w)
-            w.open()
+
+            if show:
+                w.show()
 
     def close(self, window: "type[Window]") -> None:
         sel_windows = [w for w in self._active_windows if isinstance(w, window)]
 
         for sw in sel_windows:
-            sw.close()
+            sw.hide()
             self._active_windows.remove(sw)
 
     def mainloop(self) -> None:
@@ -48,18 +47,16 @@ class WindowManager:
 
     def _eventloop(self) -> None:
         for e in pygame.event.get():
-            if e.type == pygame.QUIT:
-                self.close(Window)
-                self._running = False
-                continue
-
             data = e.dict
 
             w = self._get_window(data.get("window", None))
             if w is None:
                 continue
 
-            if e.type == pygame.MOUSEMOTION:
+            if e.type == pygame.WINDOWCLOSE:
+                self.close(Window)
+                self._running = False
+            elif e.type == pygame.MOUSEMOTION:
                 w.mouse_move(data["pos"], data["rel"], data["buttons"])
 
             elif e.type == pygame.MOUSEBUTTONDOWN:
@@ -75,20 +72,76 @@ class WindowManager:
 
         return None
 
+    def all(
+        self, check: "Callable[[Window], bool]", action: "Callable[[Window], None]"
+    ) -> None:
+        for i in self._active_windows:
+            if check(i):
+                action(i)
+
+    def show(self, arg: "type[Window] | Callable[[Window], bool]") -> None:
+        if isinstance(arg, type):
+
+            def check(w: Window):
+                return isinstance(w, arg)
+
+        else:
+            check = lambda w: arg(w)
+
+        self.all(check, lambda w: w.show())
+
+    def hide(self, arg: "type[Window] | Callable[[Window], bool]") -> None:
+        if isinstance(arg, type):
+
+            def check(w: Window):
+                return isinstance(w, arg)
+
+        else:
+            check = lambda w: arg(w)
+
+        self.all(check, lambda w: w.hide())
+
+
+type FontIdentifier = tuple[str, int, bool, bool]
+type FontSpec = tuple[str, col]
+
 
 class Window(abc.ABC):
-    def __init__(
-        self, title: str, w: int, h: int, parent: Optional[pygame._sdl2.Window]
-    ) -> None:
-        self._win = pygame._sdl2.video.Window(title, size=(w, h))
-        self._win.hide()
-        if parent:
-            self._win.set_modal_for(parent)
+    @staticmethod
+    def background() -> col:
+        return col.hex(0x1E1E1E)
+
+    @staticmethod
+    def title(name: str) -> str:
+        return "CC/v2 - " + name
+
+    def __init__(self, title: str, w: int, h: int, dx: int = 0, dy: int = 0) -> None:
+        self._win = pygame._sdl2.video.Window(title, size=(w, h), hidden=True)
+        self._win.resizable = False
+
+        self._move(dx, dy)
 
         self._ren = pygame._sdl2.video.Renderer(self._win)
         self._surface = self._ren.to_surface()
 
-    def open(self) -> None:
+    def render(
+        self, specs: FontSpec, font: FontIdentifier, antialias: bool = True
+    ) -> pygame.Surface:
+        return pygame.font.SysFont(*font).render(
+            specs[0],
+            antialias,
+            specs[1].rgb,
+        )
+
+    def _move(self, dx: int, dy: int) -> None:
+        p = self._win.position
+
+        if isinstance(p, int):
+            self._win.position = (p + dx, p + dy)
+        else:
+            self._win.position = (p[0] + dx, p[1] + dy)  # type: ignore
+
+    def show(self) -> None:
         self._win.show()
 
     @property
@@ -120,12 +173,8 @@ class Window(abc.ABC):
         pygame._sdl2.Texture.from_surface(self._ren, self._surface).draw()
         self._ren.present()
 
-    def close(self) -> None:
+    def hide(self) -> None:
         self._win.hide()
-
-
-def hexcol(c: int) -> int3:
-    return (c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF
 
 
 class LaunchpadWindow(Window, LightReceiver):
@@ -133,28 +182,24 @@ class LaunchpadWindow(Window, LightReceiver):
     SPACE = 3
     PADD = 5
 
-    CENTER_COL = hexcol(0xCCCCCC)
-    CTRLLR_COL = hexcol(0x303030)
-    WHITE = hexcol(0xFFFFFF)
+    CENTER_COL = col.hex(0xCCCCCC)
+    CTRLLR_COL = col.hex(0x303030)
+    WHITE = col.hex(0xFFFFFF)
 
-    def __init__(self, parent: Optional[pygame._sdl2.Window] = None) -> None:
+    def __init__(self) -> None:
         w = self.WIDTH * 10 + self.SPACE * 9 + self.PADD * 2
         h = self.WIDTH * 10 + self.SPACE * 10 + self.PADD * 2
 
-        super().__init__("CC/v2 - Launchpad", w, h, parent)
+        super().__init__(self.title("Launchpad"), w, h)
 
-        self._buttons: dict[int2, int3] = {}
+        self._buttons: dict[int2, col] = {}
 
-        m = Lightmap.MAPS.get("Mk2+", None)
-        if not m:
-            raise RuntimeError("Could not find requested lightmap!")
-        self._lightmap: Lightmap = m
         self._button_hover: Optional[int2] = None
 
         LightManager().add_light_receiver(self)
 
     @property
-    def buttons(self) -> dict[int2, int3]:
+    def buttons(self) -> dict[int2, col]:
         return self._buttons
 
     def _button_size(self, x: int, y: int) -> int2:
@@ -193,15 +238,8 @@ class LaunchpadWindow(Window, LightReceiver):
 
         return True
 
-    def _colmix(self, a: int3, b: int3) -> int3:
-        return (
-            (a[0] + b[0]) // 2,
-            (a[1] + b[1]) // 2,
-            (a[2] + b[2]) // 2,
-        )
-
     def frame(self) -> None:
-        self._surface.fill((30, 30, 30))
+        self._surface.fill(self.background().rgb)
 
         for x in range(10):
             for y in range(11):
@@ -226,34 +264,34 @@ class LaunchpadWindow(Window, LightReceiver):
         center = self._button_center(x, y)
         brad = 1 if center else 3
 
-        col = self.CENTER_COL if center else self.CTRLLR_COL
+        c = self.CENTER_COL if center else self.CTRLLR_COL
         bcol = self._buttons.get((x, y), None)
 
         if bcol:
-            col = bcol
+            c = bcol
 
         if self._button_hover == (x, y):
-            col = self._colmix(col, self.WHITE)
+            c.mix(self.WHITE)
 
-        self._draw_rect(col, pos, brad, center)
+        self._draw_rect(c, pos, brad, center)
 
     def _draw_rect(
         self,
-        col: int3,
+        col: col,
         pos: int4,
         brad: int,
         center: bool,
     ) -> None:
         pygame.draw.rect(
             self._surface,
-            col,
+            col.rgb,
             pos,
             border_radius=brad,
         )
 
         pygame.draw.rect(
             self._surface,
-            self.CTRLLR_COL if center else self.CENTER_COL,
+            self.CTRLLR_COL.rgb if center else self.CENTER_COL.rgb,
             pos,
             width=1,
             border_radius=brad,
@@ -274,13 +312,13 @@ class LaunchpadWindow(Window, LightReceiver):
 
         return None
 
-    def __setitem__(self, pos: int2, col: int) -> None:
+    def __setitem__(self, pos: int2, c: col) -> None:
         p = (pos[0] + 1, pos[1] + 1)
-        if col == 0:
+        if c == col(0, 0, 0):
             del self._buttons[p]
             return
 
-        self._buttons[p] = self._lightmap[col]
+        self._buttons[p] = c
 
     def mouse_move(self, pos: int2, rel: int2, buttons: int3) -> None:
         self._button_hover = self._check_collision(*pos)
@@ -288,21 +326,35 @@ class LaunchpadWindow(Window, LightReceiver):
     def mouse_down(self, pos: int2, button: int) -> None:
         btn = self._check_collision(*pos)
         if btn:
-            Launchpad.simulate_down(*btn)
+            Launchpad.simulate_down(btn[0] - 1, btn[1] - 1)
 
     def mouse_up(self, pos: int2, button: int) -> None:
         btn = self._check_collision(*pos)
         if btn:
-            Launchpad.simulate_up(*btn)
+            Launchpad.simulate_up(btn[0] - 1, btn[1] - 1)
 
 
 def open_and_run() -> int:
+    from ui.track_ui import TrackWindow
+    from ui.category_ui import CategoryUi
+    from ui.generator_ui import GeneratorWindow
+
     man = WindowManager()
-    man.open(LaunchpadWindow())
+    man.open(
+        LaunchpadWindow(),
+        TrackWindow(),
+        CategoryUi(),
+    )
+    man.open(
+        GeneratorWindow(),
+        show=False,
+    )
 
     try:
         man.mainloop()
     except KeyboardInterrupt:
         pass
+    finally:
+        man.close(Window)
 
     return 0

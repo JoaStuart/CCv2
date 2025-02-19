@@ -5,8 +5,11 @@ from typing import Optional
 import pygame.midi as midi
 
 from daemon_thread import DaemonThread
-from launchpad.route import DefaultLaunchpadRouter, LaunchpadRouter
+from launchpad.route import LaunchpadRouter
+from lighting.lightmap import Lightmap
 import logger
+from ptypes import int2
+from utils.color import col
 
 
 midi.init()
@@ -77,9 +80,9 @@ class Launchpad(abc.ABC):
                 logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
 
     @staticmethod
-    def broadcast_light(cmd: int, pos: tuple[int, int], vel: int) -> None:
+    def broadcast_light(cmd: int, pos: int2, color: col) -> None:
         for o in Launchpad.OUTPUTS:
-            o.send_light(cmd, pos, vel)
+            o.send_light(cmd, pos, color)
 
     @staticmethod
     def broadcast_clear() -> None:
@@ -90,7 +93,7 @@ class Launchpad(abc.ABC):
 
         for o in Launchpad.OUTPUTS:
             for d in data:
-                o.broadcast_light(Launchpad.NOTE_ON, d, 0)
+                o.broadcast_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
 
     @staticmethod
     def simulate_down(x: int, y: int) -> None:
@@ -137,7 +140,7 @@ class LaunchpadChecker(DaemonThread):
 class LaunchpadIn(Launchpad, DaemonThread):
     def __init__(self, index: int) -> None:
         self._in = midi.Input(index)
-        self._callback: LaunchpadRouter = DefaultLaunchpadRouter(self)
+        self._callback: LaunchpadRouter = LaunchpadRouter(self)
 
         super().__init__("MidiReader-%d" % index)
 
@@ -163,6 +166,7 @@ class LaunchpadIn(Launchpad, DaemonThread):
 class LaunchpadOut(Launchpad):
     def __init__(self, index: int) -> None:
         self._out = midi.Output(index)
+        self._lightmap = Lightmap.MAPS[self.lightmap()]
 
     def send(self, data: list[int]) -> None:
         if len(data) > 4:
@@ -174,6 +178,6 @@ class LaunchpadOut(Launchpad):
         for m in self._welcome_messages():
             self.send(m)
 
-    def send_light(self, cmd: int, pos: tuple[int, int], vel: int) -> None:
+    def send_light(self, cmd: int, pos: int2, color: col) -> None:
         note, cmd = self.xy_to_midi(pos, cmd)
-        self.send([cmd, note, vel])
+        self.send([cmd, note, self._lightmap.vel(color)])

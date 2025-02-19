@@ -2,6 +2,7 @@ import os
 
 import constants
 from lighting.lightmap import Lightmap
+from utils.color import col
 
 
 def create_lightmap() -> None:
@@ -20,14 +21,14 @@ def create_lightmap() -> None:
         if len(p) == 0:
             continue
 
-        key, col = p.split(", ")
+        key, c = p.split(", ")
 
         ikey = int(key)
-        pcol = col.split(" ")
+        pcol = c.split(" ")
         if len(pcol) != 3:
             continue
 
-        icol = (
+        icol = col(
             int(pcol[0]),
             int(pcol[1]),
             int(pcol[2]),
