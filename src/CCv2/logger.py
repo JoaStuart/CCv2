@@ -7,8 +7,7 @@ _LOG = logging.getLogger()
 def init(verbose: bool) -> None:
     lvl = logging.DEBUG if verbose else logging.INFO
     formatter = logging.Formatter(
-        "%(asctime)s :: %(funcName)s<@>%(threadName)s [%(levelname)-1.1s] %(message)s",
-        "%Y-%m-%d %H:%M:%S",
+        "%(funcName)s<@>%(threadName)s :: [%(levelname)-1.1s] %(message)s"
     )
 
     console_handler = logging.StreamHandler(sys.stdout)

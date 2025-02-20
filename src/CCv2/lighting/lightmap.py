@@ -57,9 +57,6 @@ class Lightmap:
 
         return 0
 
-    def _normalize(self, c: int) -> int:
-        return max(0, min(c, 255))
-
     def __len__(self) -> int:
         return len(self._mappings)
 

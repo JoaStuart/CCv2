@@ -3,3 +3,4 @@ pygame==2.6.1
 pyautogui==0.9.54
 pyqt6==6.8.1
 librosa==0.10.2
+dearpygui==2.0.0

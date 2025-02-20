@@ -61,7 +61,7 @@ class LaunchpadMk3Pro(Launchpad):
             return 0, mode
 
     def lightmap(self) -> str:
-        return "Mk2+"
+        return "Mk2+Realism"
 
     def _welcome_messages(self) -> list[list[int]]:
         return [

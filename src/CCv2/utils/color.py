@@ -11,20 +11,21 @@ class col:
     def hex(c: int) -> "col":
         return col((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF)
 
+    @staticmethod
+    def rep(c: int) -> "col":
+        return col(c, c, c)
+
     def __init__(self, r: int, g: int, b: int) -> None:
         self.r = r
         self.g = g
         self.b = b
+        self._limit()
 
     def mix(self, other: operand) -> "col":
-        self._self(lambda a, b: (a + b) / 2, other)
-
-        return self
+        return self._all(lambda a, b: (a + b) / 2, other)
 
     def gamma(self, other: float) -> "col":
-        self._self(lambda a, b: a * b, other)
-
-        return self
+        return self._all(lambda a, b: a * b, other)
 
     def dot(self) -> float:
         return (self.r + self.g + self.b) / 3
@@ -60,6 +61,8 @@ class col:
             self.r = round(op(self.r, other))
             self.g = round(op(self.g, other))
             self.b = round(op(self.b, other))
+
+        self._limit()
 
     def __add__(self, other: operand) -> "col":
         return self._all(lambda a, b: a + b, other)
