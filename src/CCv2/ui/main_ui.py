@@ -40,6 +40,17 @@ class WindowManager:
         dpg.show_viewport()
         dpg.start_dearpygui()
 
+    def selected_theme(self) -> None:
+        with dpg.theme() as disabled_theme:
+            with dpg.theme_component(dpg.mvButton, enabled_state=False):
+                color = col.hex(0x225376).rgb
+
+                dpg.add_theme_color(dpg.mvThemeCol_Button, color)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, color)
+                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, color)
+
+        dpg.bind_theme(disabled_theme)
+
 
 class Window(abc.ABC):
     @staticmethod
@@ -49,6 +60,10 @@ class Window(abc.ABC):
     def __init__(self, label: str, tag: str) -> None:
         self.label = label
         self.tag = tag
+
+    @property
+    def main(self):
+        return WindowManager()
 
     @abc.abstractmethod
     def setup(self) -> None:
@@ -139,7 +154,7 @@ class LaunchpadWindow(Window, LightReceiver):
 
     def __setitem__(self, pos: int2, c: col) -> None:
         x, y = pos
-        dpg.configure_item(f"{x}:{y}", color=c.rgb)
+        dpg.configure_item(f"{x}:{y}", default_value=c.rgb)
 
 
 def open_and_run() -> int:

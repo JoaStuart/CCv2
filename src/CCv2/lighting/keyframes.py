@@ -87,6 +87,9 @@ class Keyframes:
     def append(self, frame: Kf) -> None:
         self._keyframes.append(frame)
 
+    def __len__(self) -> int:
+        return len(self._keyframes)
+
 
 class PersistentKeyframes(Keyframes):
     def __init__(self, finish_event: threading.Event) -> None:
