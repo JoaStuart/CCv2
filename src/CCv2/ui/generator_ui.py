@@ -227,6 +227,7 @@ class GeneratorWindow(Window):
 
     def _set_length(self) -> None:
         length = dpg.get_value("generator_length")
+        print(length)
         Generator().length = length
 
     def _calculate_pos(self, vel: int) -> int3:

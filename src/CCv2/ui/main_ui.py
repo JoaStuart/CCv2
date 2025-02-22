@@ -1,9 +1,11 @@
 import abc
+import os
 from threading import Timer
 import pygame
 import pygame._sdl2.video
 import dearpygui.dearpygui as dpg
 
+import constants
 from lighting.lightmanager import LightManager, LightReceiver
 from ptypes import int2, int4
 from singleton import singleton
@@ -35,7 +37,13 @@ class WindowManager:
         dpg.destroy_context()
 
     def start(self) -> None:
-        dpg.create_viewport(title="CC/v2", width=1920, height=1080)
+        dpg.create_viewport(
+            title="CC/v2",
+            width=1920,
+            height=1080,
+            small_icon=os.path.join(constants.INTERNAL_ICONS, "icon.ico"),
+            large_icon=os.path.join(constants.INTERNAL_ICONS, "icon.ico"),
+        )
         dpg.setup_dearpygui()
         dpg.show_viewport()
         dpg.start_dearpygui()
@@ -159,11 +167,13 @@ class LaunchpadWindow(Window, LightReceiver):
 
 def open_and_run() -> int:
     from ui.generator_ui import GeneratorWindow
+    from ui.track_ui import TrackWindow
 
     man = WindowManager()
     man.open(
         LaunchpadWindow(),
         GeneratorWindow(),
+        TrackWindow(),
     )
 
     man.start()

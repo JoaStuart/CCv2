@@ -1,7 +1,7 @@
 NAME = "CCv2"
 
 run:
-	python src/CCv2
+	python src/CCv2 --verbose
 
 lightmap:
 	python src/CCv2 --lightmap
