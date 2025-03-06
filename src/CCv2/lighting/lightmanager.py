@@ -27,7 +27,7 @@ class LightManager(DaemonThread):
     def play_raw(self, kf: Keyframes) -> threading.Event:
         finish_event = threading.Event()
 
-        self._active_frames.append((kf, finish_event))
+        self._active_frames.append((kf.copy(), finish_event))
         self._new_frame_notifier.set()
 
         return finish_event
@@ -100,8 +100,9 @@ class LightManager(DaemonThread):
                 Launchpad.NOTE_ON | Launchpad.LIGHT_STATIC, pos, vel
             )
 
-            for r in self._receiver:
-                r[pos] = vel
+            # DPG be munchin on resources here, needs to be fixed at some point
+            # for r in self._receiver:
+            #     r[pos] = vel
 
             # TODO:
             # - Make the Keyframes be able to set the type of light to send (STATIC, FLASHING, PULSING)

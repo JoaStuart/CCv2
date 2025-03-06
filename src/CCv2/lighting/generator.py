@@ -1,13 +1,18 @@
 import abc
+from concurrent.futures import thread
+import os
 import threading
+from typing import Optional
 import dearpygui.dearpygui as dpg
 
+import constants
 from launchpad.base import Launchpad
 from launchpad.route import LaunchpadReceiver
 from lighting.keyframes import Keyframes, PersistentKeyframes
 from lighting.lightmanager import LightManager
 from ptypes import int2
 from singleton import singleton
+from utils.ui_property import UiProperty
 from utils.color import col
 
 
@@ -26,22 +31,22 @@ class Generator(LaunchpadReceiver):
         }
 
         self._keyframe: Keyframes = Keyframes()
-        self._color_receiver: str = "current"
+        self.color_receiver: UiProperty[str] = UiProperty("current")
 
     def next(self) -> None:
         store_map: dict[int2, col] = {}
 
-        for k, v in self._active_keys.items():
+        for k, v in self._active_keys.copy().items():
             v.off_evt.set()
             v.off_evt = threading.Event()
 
-            store_map[k] = v.peek()
-
-            next_col = v.next()
-            self._display(k, next_col, v.off_evt)
+            store_map[k] = v.curr()
 
             if v.final():
                 del self._active_keys[k]
+            else:
+                next_col = v.next()
+                self._display(k, next_col, v.off_evt)
 
         self._keyframe.append(store_map)
 
@@ -89,13 +94,10 @@ class Generator(LaunchpadReceiver):
         self._current_gradient.pop(idx)
 
     def new_color(self, color: col) -> None:
-        if self._color_receiver == "current":
+        if self.color_receiver.v == "current":
             self.color = color
         else:
             self.add_gradient(color)
-
-    def color_receiver(self, receiver: str) -> None:
-        self._color_receiver = receiver
 
     def note_on(self, x: int, y: int) -> None:
         if (x, y) in self._active_keys:
@@ -106,7 +108,7 @@ class Generator(LaunchpadReceiver):
             return
 
         light = self._light_type(
-            self._current_color, self._current_gradient, threading.Event()
+            self._current_color, self._current_gradient.copy(), threading.Event()
         )
         self._display((x, y), light.next(), light.off_evt)
 
@@ -123,9 +125,12 @@ class Generator(LaunchpadReceiver):
     def save(self, path: str) -> None:
         self.next()
 
-        Keyframes.versions()[-1].dump(self._keyframe)
+        os.makedirs(constants.CACHE_KEYFRAMES, exist_ok=True)
+        with open(os.path.join(constants.CACHE_KEYFRAMES, path), "wb") as file:
+            file.write(Keyframes.versions()[-1].dump(self._keyframe))
 
         self.clear()
+        Launchpad.broadcast_clear()
 
     def clear(self) -> None:
         self._keyframe = Keyframes()
@@ -135,7 +140,7 @@ class Generator(LaunchpadReceiver):
         for k, v in self._active_keys.items():
             v.off_evt = threading.Event()
 
-            self._display(k, v.peek(), v.off_evt)
+            self._display(k, v.curr(), v.off_evt)
 
     def preview(self) -> None:
         if len(self._keyframe) == 0:
@@ -175,6 +180,9 @@ class Light(abc.ABC):
     def peek(self) -> col:
         pass
 
+    def curr(self) -> col:
+        return self.peek()
+
 
 class StaticLight(Light):
     def next(self) -> col:
@@ -197,4 +205,7 @@ class GradientLight(Light):
         return self._idx >= len(self._gradient)
 
     def peek(self) -> col:
-        return self._gradient[self._idx + 1]
+        return self._gradient[self._idx]
+
+    def curr(self) -> col:
+        return self._gradient[self._idx - 1]

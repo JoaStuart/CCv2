@@ -1,6 +1,6 @@
 import os
 
-from utils.runtime import RuntimeVars
+import numpy as np
 
 
 SRC = os.path.dirname(__file__)
@@ -12,7 +12,18 @@ INTERNAL_ICONS = os.path.join(INTERNAL, "icons")
 CACHE = os.path.join(ROOT, "cache")
 CACHE_KEYFRAMES = os.path.join(CACHE, "keyframes")
 CACHE_AUDIO = os.path.join(CACHE, "audio")
+CACHE_BUTTONS = os.path.join(CACHE, "buttons")
+
+PROJ_EXT = ".lpz"
+PDESC_EXT = ".lpj"
+LIGHTMAP_EXT = ".lpm"
+KEYFRAME_EXT = ".lpk"
+
+SCHEMA_PROJECT_V1 = "../internal/schemas/project_v1.json"
+
+AUDIO_TICKS = 20
 
 SAMPLE_RATE = 44100
-
-RUNTIME = RuntimeVars()
+SAMPLE_DEPTH = np.int16
+SAMPLE_DEPTH_PG = -16
+OUT_CHANNELS = 5

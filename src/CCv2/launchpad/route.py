@@ -1,6 +1,8 @@
 import abc
 from typing import TYPE_CHECKING, Optional
 
+from utils.runtime import RuntimeVars
+
 if TYPE_CHECKING:
     from launchpad.base import LaunchpadIn
 
@@ -39,6 +41,10 @@ class LaunchpadReceiver(abc.ABC):
 
     @staticmethod
     def route_on(x: int, y: int) -> None:
+        if x == 8:
+            RuntimeVars().page.v = y
+            return
+
         if r := LaunchpadReceiver.ACTIVE_RECEIVER:
             r.note_on(x, y)
 

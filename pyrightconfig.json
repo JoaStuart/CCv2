@@ -1,4 +1,5 @@
 {
   "reportUnknownMemberType": "none",
-  "reportUnknownVariableType": "none"
+  "reportUnknownVariableType": "none",
+  "extraPaths": ["src/CCv2"]
 }

@@ -1,0 +1,35 @@
+import json
+from typing import Any, TypeVar
+
+
+_T = TypeVar("_T")
+
+
+class Json:
+    @staticmethod
+    def loads(data: str | bytes | bytearray):
+        return Json(json.loads(data))
+
+    def __init__(self, obj: Any) -> None:
+        self._obj = obj
+
+    def get(self, key: str | int) -> "Json":
+        if isinstance(self._obj, dict):
+            if key in self._obj:
+                return Json(self._obj[key])
+            raise RuntimeError(f"Key {key} not found!")
+        elif isinstance(self._obj, list):
+            if isinstance(key, int):
+                return Json(self._obj[key])
+            raise RuntimeError(f"A list can only be indexed with an `int`, not {key}")
+
+        raise RuntimeError("This thing is an item!")
+
+    def item(self, expected: type[_T]) -> _T:
+        if not isinstance(self._obj, expected):
+            raise RuntimeError(f"{self._obj} is not {expected}!")
+
+        return self._obj
+
+    def get_item(self, key: str, expected: type[_T]) -> _T:
+        return self.get(key).item(expected)

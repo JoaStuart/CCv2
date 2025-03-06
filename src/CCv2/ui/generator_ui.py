@@ -21,6 +21,9 @@ class GeneratorWindow(Window):
     def __init__(self) -> None:
         super().__init__("Generator", "generator")
 
+        gen = Generator()
+        gen.color_receiver.add_listener(lambda s: self._color_switch(s)(False))  # type: ignore
+
     def _get_primary_lightmap(self) -> Lightmap:
         if len(Launchpad.OUTPUTS) == 0:
             return Lightmap.MAPS["Mk2+Realism"]
@@ -29,11 +32,6 @@ class GeneratorWindow(Window):
 
     def setup(self) -> None:
         lm = self._get_primary_lightmap()
-
-        with dpg.item_handler_registry(tag="focus_handler"):
-            dpg.add_item_focus_handler(callback=self._focus)
-
-        dpg.bind_item_handler_registry("generator", "focus_handler")
 
         self._draw_tiles(lm)
 
@@ -134,13 +132,14 @@ class GeneratorWindow(Window):
             )
 
     def _color_switch(self, target: str) -> Callable[[], None]:
-        def call():
+        def call(change: bool = True):
             dpg.enable_item("color_current")
             dpg.enable_item("color_gradient")
 
             dpg.disable_item(f"color_{target}")
 
-            Generator().color_receiver(target)
+            if change:
+                Generator().color_receiver.v = target
 
         return call
 
@@ -227,7 +226,6 @@ class GeneratorWindow(Window):
 
     def _set_length(self) -> None:
         length = dpg.get_value("generator_length")
-        print(length)
         Generator().length = length
 
     def _calculate_pos(self, vel: int) -> int3:

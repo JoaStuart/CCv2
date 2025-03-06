@@ -64,6 +64,9 @@ class col:
 
         self._limit()
 
+    def __str__(self) -> str:
+        return f"col({self.r}, {self.g}, {self.b})"
+
     def __add__(self, other: operand) -> "col":
         return self._all(lambda a, b: a + b, other)
 

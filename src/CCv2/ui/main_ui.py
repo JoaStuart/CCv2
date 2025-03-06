@@ -1,11 +1,13 @@
 import abc
 import os
 from threading import Timer
+import threading
 import pygame
 import pygame._sdl2.video
 import dearpygui.dearpygui as dpg
 
 import constants
+from lighting.keyframes import Keyframes
 from lighting.lightmanager import LightManager, LightReceiver
 from ptypes import int2, int4
 from singleton import singleton
@@ -34,9 +36,10 @@ class WindowManager:
                 w.setup()
 
     def close(self) -> None:
+        pygame.mixer.stop()
         dpg.destroy_context()
 
-    def start(self) -> None:
+    def start(self, ui_show: threading.Event) -> None:
         dpg.create_viewport(
             title="CC/v2",
             width=1920,
@@ -46,16 +49,39 @@ class WindowManager:
         )
         dpg.setup_dearpygui()
         dpg.show_viewport()
+
+        ui_show.set()
         dpg.start_dearpygui()
 
+        self.close()
+
     def selected_theme(self) -> None:
-        with dpg.theme() as disabled_theme:
+        with dpg.theme() as selected_theme:
             with dpg.theme_component(dpg.mvButton, enabled_state=False):
                 color = col.hex(0x225376).rgb
 
                 dpg.add_theme_color(dpg.mvThemeCol_Button, color)
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, color)
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, color)
+
+        dpg.bind_theme(selected_theme)
+
+    def disabled_theme(self) -> None:
+        with dpg.theme() as disabled_theme:
+            for c in [
+                dpg.mvInputFloat,
+                dpg.mvInputIntMulti,
+                dpg.mvInputText,
+                dpg.mvCheckbox,
+            ]:
+                with dpg.theme_component(c, enabled_state=False):
+                    bg = col.hex(0x2D2D30).rgb
+
+                    dpg.add_theme_color(dpg.mvThemeCol_FrameBg, bg)
+                    dpg.add_theme_color(dpg.mvThemeCol_Text, col.hex(0xABABAC).rgb)
+                    dpg.add_theme_color(dpg.mvThemeCol_Button, bg)
+                    dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, bg)
+                    dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, bg)
 
         dpg.bind_theme(disabled_theme)
 
@@ -158,6 +184,7 @@ class LaunchpadWindow(Window, LightReceiver):
             height=ch,
             pos=(cx, cy + 17),
             label=f"{x - 1}:{y - 1}",
+            tag=f"{x - 1}:{y - 1}",
         )
 
     def __setitem__(self, pos: int2, c: col) -> None:
@@ -168,13 +195,20 @@ class LaunchpadWindow(Window, LightReceiver):
 def open_and_run() -> int:
     from ui.generator_ui import GeneratorWindow
     from ui.track_ui import TrackWindow
+    from ui.props_ui import PropsWindow
+    from ui.proj_ui import ProjectWindow
+
+    ui_show = threading.Event()
+    LightManager().play_raw(Keyframes.FRAME_CACHE["__splash"].persistent(ui_show))
 
     man = WindowManager()
     man.open(
         LaunchpadWindow(),
         GeneratorWindow(),
         TrackWindow(),
+        PropsWindow(),
+        ProjectWindow(),
     )
 
-    man.start()
+    man.start(ui_show)
     return 0

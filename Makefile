@@ -3,6 +3,9 @@ NAME = "CCv2"
 run:
 	python src/CCv2 --verbose
 
+run_proj:
+	python src/CCv2 --verbose "C:\Users\Joa\Documents\Python\CCv2\proj.lpz"
+
 lightmap:
 	python src/CCv2 --lightmap
 

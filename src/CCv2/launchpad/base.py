@@ -153,14 +153,18 @@ class LaunchpadIn(Launchpad, DaemonThread):
         self._callback = callback
 
     def thread_loop(self) -> None:
-        messages = self._in.read(1)
-        if len(messages) == 0:
+        try:
+            messages = self._in.read(1)
+            if len(messages) == 0:
+                return
+
+            data = messages[0][0]
+            assert isinstance(data, list)
+
+            self._callback.route(*data)
+        except RuntimeError:
+            self._running = False
             return
-
-        data = messages[0][0]
-        assert isinstance(data, list)
-
-        self._callback.route(*data)
 
 
 class LaunchpadOut(Launchpad):

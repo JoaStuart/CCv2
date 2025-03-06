@@ -1,0 +1,13 @@
+{
+  "configurations": [
+    {
+      "name": "Python Debugger: Debug CCv2",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "src/CCv2",
+      "console": "integratedTerminal",
+      "args": ["--verbose"],
+      "justMyCode": false
+    }
+  ]
+}

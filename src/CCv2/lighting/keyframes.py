@@ -26,6 +26,9 @@ class Keyframes:
     def load_internal() -> None:
         for k in os.listdir(constants.INTERNAL_KEYFRAMES):
             name, _ = os.path.splitext(k)
+            if not k.endswith(constants.KEYFRAME_EXT):
+                continue
+
             logger.debug("Loading internal keyframes %s...", k)
 
             with open(os.path.join(constants.INTERNAL_KEYFRAMES, k), "rb") as rf:
@@ -33,7 +36,7 @@ class Keyframes:
 
             for v in Keyframes.versions():
                 if v.check(data):
-                    Keyframes.FRAME_CACHE[name] = v.load(data)
+                    Keyframes.FRAME_CACHE[f"__{name}"] = v.load(data)
                     break
             else:
                 logger.warning("Could not load %s as keyframes!", k)
@@ -45,6 +48,9 @@ class Keyframes:
         self._anim_time: float = 0.3
 
     def next_wait(self) -> float:
+        if len(self._keyframes) == 0:
+            return 0
+
         return (
             self._last_frame_time + self._anim_time / len(self._keyframes)
         ) - time.time()
@@ -64,6 +70,13 @@ class Keyframes:
             return None
 
         return self._keyframes[self._current_frame - 1]
+
+    def copy(self) -> "Keyframes":
+        new = Keyframes()
+        new._keyframes = self._keyframes
+        new._anim_time = self._anim_time
+
+        return new
 
     @property
     def frame(self) -> int:
@@ -87,6 +100,13 @@ class Keyframes:
     def append(self, frame: Kf) -> None:
         self._keyframes.append(frame)
 
+    def persistent(self, evt: threading.Event) -> "PersistentKeyframes":
+        pk = PersistentKeyframes(evt)
+        pk._keyframes = self._keyframes
+        pk._anim_time = self._anim_time
+
+        return pk
+
     def __len__(self) -> int:
         return len(self._keyframes)
 
@@ -105,6 +125,13 @@ class PersistentKeyframes(Keyframes):
             self._current_frame %= len(self._keyframes)
 
         return super().next()
+
+    def copy(self) -> Keyframes:
+        new = PersistentKeyframes(self._finish_event)
+        new._keyframes = self._keyframes
+        new._anim_time = self._anim_time
+
+        return new
 
 
 class KeyframesLoader(abc.ABC):
@@ -160,6 +187,6 @@ class KeyframesV1(KeyframesLoader):
             data.append(struct.pack("I", len(d)))
             for (x, y), value in d.items():
                 data.append(struct.pack("B", self._pack_key(x, y)))
-                data.append(struct.pack("BBB", *value))
+                data.append(struct.pack("BBB", *(value.rgb)))
 
         return b"".join(data)

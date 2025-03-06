@@ -17,13 +17,16 @@ class Lightmap:
     @staticmethod
     def load_all() -> None:
         for m in os.listdir(constants.LIGHTMAPS):
+            if not m.endswith(constants.LIGHTMAP_EXT):
+                continue
+
             map_path = os.path.join(constants.LIGHTMAPS, m)
             logger.debug("Attempting to load Lightmap `%s`...", m)
 
             with open(map_path, "rb") as rf:
                 data = rf.read()
 
-            lightmap = Lightmap(m)
+            lightmap = Lightmap(os.path.splitext(m)[0])
 
             for v in Lightmap.versions():
                 if v.check(data):
