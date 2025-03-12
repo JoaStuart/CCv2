@@ -39,6 +39,7 @@ class GeneratorWindow(Window):
             self._draw_current_color(lm)
             self._draw_current_gradient(lm)
 
+        self.main.selected_theme()
         self._draw_color_switch()
         self._draw_light_switch()
 
@@ -116,8 +117,6 @@ class GeneratorWindow(Window):
         return call
 
     def _draw_color_switch(self) -> None:
-        self.main.selected_theme()
-
         with dpg.group(horizontal=True):
             dpg.add_button(
                 label="Current Color",

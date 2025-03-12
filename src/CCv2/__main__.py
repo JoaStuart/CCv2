@@ -63,7 +63,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    code = main()  # Run application
+    try:
+        code = main()  # Run application
+    except KeyboardInterrupt:
+        code = -1
+        logger.info("Got keyboard interrupt, stopping app...")
 
     logger.info("Stopping daemon threads...")
     DaemonThread.clean_all()  # Stop daemon threads

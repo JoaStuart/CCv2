@@ -210,10 +210,6 @@ class TrackWindow(Window, LaunchpadReceiver):
 
         max_height_tracks = len(self._project().tracks.v) * 25
 
-        # for x, w in BLOCKS:
-        #     dpg.draw_rectangle((x, 20), (x + w, 130), color=(0, 255, 0, 255),
-        #                     fill=(0, 255, 0, 100), parent=self.DYNAMIC)
-
         for t in self._project().timestamps.v:
             color = (255, 0, 0) if t.page == RuntimeVars().page.v else (50, 10, 0)
 
