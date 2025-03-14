@@ -4,7 +4,7 @@ from launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 class LaunchpadMk3Pro(Launchpad):
     @staticmethod
     def name_re() -> str:
-        return r"^LPProMK3 MIDI$"
+        return r"LPProMK3 MIDI"
 
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:

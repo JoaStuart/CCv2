@@ -5,6 +5,8 @@ _LOG = logging.getLogger()
 
 
 def init(verbose: bool) -> None:
+    global print
+
     lvl = logging.DEBUG if verbose else logging.INFO
     formatter = logging.Formatter(
         "%(funcName)s<@>%(threadName)s :: [%(levelname)-1.1s] %(message)s"
@@ -16,6 +18,8 @@ def init(verbose: bool) -> None:
 
     _LOG.setLevel(lvl)
     _LOG.addHandler(console_handler)
+
+    print = _LOG.info
 
 
 debug = _LOG.debug

@@ -4,3 +4,6 @@ cache/**
 ideas.txt
 
 **/__pycache__
+
+# Ignore custom pygame build
+_pygame

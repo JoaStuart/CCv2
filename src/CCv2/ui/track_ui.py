@@ -3,7 +3,7 @@ from re import L
 from typing import Any, Optional
 import dearpygui.dearpygui as dpg
 import numpy as np
-import pygame
+import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 
 from audio.audio_route import audio_router
 import constants

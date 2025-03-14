@@ -46,6 +46,7 @@ class Keyframes:
         self._current_frame: int = 0
         self._last_frame_time: float = 0
         self._anim_time: float = 0.3
+        self._static_after: bool = False
 
     def next_wait(self) -> float:
         if len(self._keyframes) == 0:
@@ -75,8 +76,13 @@ class Keyframes:
         new = Keyframes()
         new._keyframes = self._keyframes
         new._anim_time = self._anim_time
+        new._static_after = self._static_after
 
         return new
+
+    @property
+    def static_after(self) -> bool:
+        return self._static_after
 
     @property
     def frame(self) -> int:
@@ -92,7 +98,8 @@ class Keyframes:
 
     @anim_time.setter
     def anim_time(self, time: float) -> None:
-        self._anim_time = time
+        self._static_after = time < 0
+        self._anim_time = abs(time)
 
     def num_frames(self) -> int:
         return len(self._keyframes)
@@ -104,6 +111,7 @@ class Keyframes:
         pk = PersistentKeyframes(evt)
         pk._keyframes = self._keyframes
         pk._anim_time = self._anim_time
+        pk._static_after = self._static_after
 
         return pk
 
@@ -178,9 +186,10 @@ class KeyframesV1(KeyframesLoader):
         return keyframes
 
     def dump(self, keyframes: Keyframes) -> bytes:
-        data: list[bytes] = [b"\xCC\x01"]
+        data: list[bytes] = [b"\xcc\x01"]
 
-        data.append(struct.pack("f", keyframes.anim_time))
+        static = -1 if keyframes.static_after else 1
+        data.append(struct.pack("f", keyframes.anim_time * static))
         data.append(struct.pack("I", keyframes.num_frames()))
 
         while (d := keyframes.next()) is not None:

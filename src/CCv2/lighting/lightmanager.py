@@ -3,6 +3,7 @@ import threading
 from daemon_thread import DaemonThread
 from launchpad.base import Launchpad
 from lighting.keyframes import Keyframes
+import logger
 from ptypes import int2
 from singleton import singleton
 from utils.color import col
@@ -20,9 +21,6 @@ class LightManager(DaemonThread):
         self._receiver: list[LightReceiver] = []
 
         super().__init__("LightManager")
-
-    def static(self, x: int, y: int, c: col) -> None:
-        self._static_launchpad[(x, y)] = c
 
     def play_raw(self, kf: Keyframes) -> threading.Event:
         finish_event = threading.Event()
@@ -46,12 +44,13 @@ class LightManager(DaemonThread):
 
     def thread_loop(self) -> None:
         if len(self._active_frames) == 0:
-            self._new_frame_notifier.clear()
             self._new_frame_notifier.wait()
+            self._new_frame_notifier.clear()
         else:
             wait = self._get_shortest_wait()
             if wait > 0:
                 self._new_frame_notifier.wait(wait)
+                self._new_frame_notifier.clear()
 
         self._handle_frame()
 
@@ -70,6 +69,16 @@ class LightManager(DaemonThread):
                 frame = kf.next()
 
             if frame is None:
+                if kf.static_after:
+                    frame = kf.last()
+
+                    if not frame:
+                        print("No last frame")
+                        continue
+
+                    for k, v in frame.items():
+                        self._static_launchpad[k] = v
+
                 finished_frames.append((kf, end))
                 end.set()
                 continue
@@ -78,6 +87,16 @@ class LightManager(DaemonThread):
 
         for f in finished_frames:
             self._active_frames.remove(f)
+
+        static_remove: list[int2] = []
+        for k, v in self._static_launchpad.items():
+            if next_screen.get(k, None) is not None:
+                static_remove.append(k)
+
+        for r in static_remove:
+            del self._static_launchpad[r]
+
+        next_screen |= self._static_launchpad
 
         write_buffer: Kf = {}
         for k in self._current_launchpad.keys() | next_screen.keys():

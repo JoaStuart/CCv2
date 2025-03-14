@@ -6,5 +6,5 @@ from utils.ui_property import UiProperty
 @singleton
 class RuntimeVars:
     def __init__(self) -> None:
-        self.project = Project()
+        self.project: Project = Project()
         self.page: UiProperty[int] = UiProperty(0)

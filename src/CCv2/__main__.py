@@ -1,9 +1,7 @@
-import logging
 import sys
 from threading import Timer
 import threading
-
-import librosa
+import time
 
 from daemon_thread import DaemonThread
 from launchpad.base import Launchpad
@@ -16,16 +14,6 @@ import logger
 from project.project import Project
 from scripts.lightmap import create_lightmap
 from ui.main_ui import open_and_run
-
-# Pre-import this module because
-# if we do this after the midi reader
-# thread is started, this takes *years*
-import librosa.core.audio
-
-librosa.load
-
-
-logging.getLogger("numba").setLevel(logging.WARNING)
 
 
 def main() -> int:
@@ -58,6 +46,10 @@ def main() -> int:
         Project.load(args.file)
 
         load_finish.set()
+
+    LightManager().play_raw(Keyframes.FRAME_CACHE["__splash_entry"]).wait()
+
+    Launchpad.resume_read()
 
     return open_and_run()
 

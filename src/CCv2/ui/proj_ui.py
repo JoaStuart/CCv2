@@ -3,6 +3,7 @@ from typing import Callable
 import dearpygui.dearpygui as dpg
 
 from audio.audio_route import AudioRouter
+from audio.track import AudioTrack
 import constants
 from launchpad.route import LaunchpadReceiver
 from lighting.generator import Generator
@@ -29,6 +30,34 @@ class ProjectWindow(Window, LaunchpadReceiver):
 
         dpg.add_separator()
         self._draw_info(proj)
+
+        dpg.add_separator()
+        self._draw_track_volumes()
+
+    def _draw_track_volumes(self) -> None:
+        proj = RuntimeVars().project
+
+        for t in proj.tracks.v:
+            with dpg.group(horizontal=True):
+                dpg.add_text(t.name)
+
+                tag = hex(hash(t))
+                dpg.add_slider_int(
+                    tag=tag,
+                    tracked=True,
+                    callback=self._make_vol_callback(tag, t),
+                    default_value=round(t.volume * 100),
+                    clamped=True,
+                    min_value=0,
+                    max_value=100,
+                )
+
+    def _make_vol_callback(self, tag: str, track: AudioTrack) -> Callable[[], None]:
+        def call() -> None:
+            vol = dpg.get_value(tag)
+            track.volume = vol / 100
+
+        return call
 
     def _draw_router(self) -> None:
         self.main.selected_theme()

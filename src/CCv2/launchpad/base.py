@@ -1,8 +1,9 @@
 import abc
 import re
+import threading
 import time
 from typing import Optional
-import pygame.midi as midi
+import pygame.midi as midi  # type: ignore # Pylance cannot resolve self-compiled pygame
 
 from daemon_thread import DaemonThread
 from launchpad.route import LaunchpadRouter
@@ -27,10 +28,20 @@ class Launchpad(abc.ABC):
     INPUTS: "list[LaunchpadIn]" = []
     OUTPUTS: "list[LaunchpadOut]" = []
 
+    UNPAUSE_READ: threading.Event = threading.Event()
+
     @staticmethod
     @abc.abstractmethod
     def name_re() -> str:
         pass
+
+    @staticmethod
+    def pause_read() -> None:
+        Launchpad.UNPAUSE_READ.clear()
+
+    @staticmethod
+    def resume_read() -> None:
+        Launchpad.UNPAUSE_READ.set()
 
     @staticmethod
     def get_by_name_in(name: str) -> "Optional[type[LaunchpadIn]]":
@@ -38,7 +49,7 @@ class Launchpad(abc.ABC):
 
         pad_types = [LaunchpadMk3ProIn]
         for t in pad_types:
-            if re.match(t.name_re(), name):
+            if len(re.findall(t.name_re(), name)) > 0:
                 return t
         return None
 
@@ -48,7 +59,7 @@ class Launchpad(abc.ABC):
 
         pad_types = [LaunchpadMk3ProOut]
         for t in pad_types:
-            if re.match(t.name_re(), name):
+            if len(re.findall(t.name_re(), name)) > 0:
                 return t
         return None
 
@@ -63,7 +74,10 @@ class Launchpad(abc.ABC):
     def load(index: int) -> None:
         _, name, inp, outp, _ = midi.get_device_info(index)
         logger.debug(
-            "Discovered MIDI device %s :: IN=%d OUT=%d", name.decode(), inp, outp
+            "Discovered MIDI device '%s' :: %s%s",
+            name.decode(),
+            "IN" if inp > 0 else "",
+            "OUT" if outp > 0 else "",
         )
 
         if inp == 1:
@@ -153,6 +167,8 @@ class LaunchpadIn(Launchpad, DaemonThread):
         self._callback = callback
 
     def thread_loop(self) -> None:
+        Launchpad.UNPAUSE_READ.wait()
+
         try:
             messages = self._in.read(1)
             if len(messages) == 0:

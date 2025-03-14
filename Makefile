@@ -5,7 +5,7 @@ run:
 	$(EXE) src/CCv2 --verbose
 
 run_proj:
-	$(EXE) src/CCv2 --verbose "C:\Users\Joa\Documents\Python\CCv2\proj.lpz"
+	$(EXE) src/CCv2 --verbose "/home/joa/Documents/Python/CCv2/proj.lpz"
 
 lightmap:
 	$(EXE) src/CCv2 --lightmap

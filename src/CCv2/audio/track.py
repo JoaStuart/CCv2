@@ -1,6 +1,4 @@
 import os
-from typing import Any
-import librosa
 import numpy as np
 
 import constants
@@ -13,18 +11,19 @@ class AudioTrack:
         path = os.path.abspath(path)
         self._path = path
         self._vol: float = 1
+        self._name: str = os.path.splitext(os.path.basename(path))[0].capitalize()
 
         logger.debug(f"Loading audio file `{path}`...")
-        data: AudioRaw = librosa.load(
+        from scipy.io.wavfile import read
+
+        self._data: AudioRaw = read(
             path,
-            sr=constants.SAMPLE_RATE,
-            mono=False,
-            res_type="kaiser_fast",
-        )[0]
+        )[1]
         logger.debug("Finished loading audio")
 
-        info = np.iinfo(constants.SAMPLE_DEPTH)
-        self._data = (data * info.max).astype(constants.SAMPLE_DEPTH).T.copy()
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def track(self) -> AudioRaw:

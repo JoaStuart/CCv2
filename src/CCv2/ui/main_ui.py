@@ -2,8 +2,7 @@ import abc
 import os
 from threading import Timer
 import threading
-import pygame
-import pygame._sdl2.video
+import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 import dearpygui.dearpygui as dpg
 
 import constants
@@ -193,13 +192,13 @@ class LaunchpadWindow(Window, LightReceiver):
 
 
 def open_and_run() -> int:
+    ui_show = threading.Event()
+    LightManager().play_raw(Keyframes.FRAME_CACHE["__splash"].persistent(ui_show))
+
     from ui.generator_ui import GeneratorWindow
     from ui.track_ui import TrackWindow
     from ui.props_ui import PropsWindow
     from ui.proj_ui import ProjectWindow
-
-    ui_show = threading.Event()
-    LightManager().play_raw(Keyframes.FRAME_CACHE["__splash"].persistent(ui_show))
 
     man = WindowManager()
     man.open(

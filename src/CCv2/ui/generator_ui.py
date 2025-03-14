@@ -1,7 +1,7 @@
 from functools import partial
 import os
 from typing import Callable, Optional
-import pygame
+import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 import dearpygui.dearpygui as dpg
 
 import constants

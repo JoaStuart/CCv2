@@ -1,12 +1,11 @@
 import abc
 import json
 import os
-import shutil
 import struct
 import threading
+import time
 from typing import Optional
 import zipfile
-import zlib
 import numpy as np
 
 import constants
@@ -15,6 +14,7 @@ import logger
 from project.baking import BakedProject
 from ptypes import AudioRaw, int2
 from utils.json_wrapper import Json
+from utils.shutil_faster import FastShutil
 from utils.ui_property import UiProperty
 
 
@@ -28,25 +28,32 @@ class ProjButton:
 class Project:
     @staticmethod
     def load(path: str) -> None:
-        Project._clear()
+        from launchpad.base import Launchpad
 
         try:
-            with zipfile.ZipFile(path, "r") as zfile:
-                zfile.extractall(path=constants.CACHE)
-        except RuntimeError:
+            Launchpad.pause_read()
+            logger.debug("Clearing cache")
+            Project._clear()
+
+            try:
+                with zipfile.ZipFile(path, "r") as zfile:
+                    zfile.extractall(path=constants.CACHE)
+            except RuntimeError:
+                raise RuntimeError("The provided file is not a valid CCv2 cover file!")
+
+            for v in Project.versions():
+                if v.check():
+                    from utils.runtime import RuntimeVars
+
+                    p = v.load()
+                    p.load_path = path
+
+                    RuntimeVars().project = p
+                    return
+
             raise RuntimeError("The provided file is not a valid CCv2 cover file!")
-
-        for v in Project.versions():
-            if v.check():
-                from utils.runtime import RuntimeVars
-
-                p = v.load()
-                p.load_path = path
-
-                RuntimeVars().project = p
-                return
-
-        raise RuntimeError("The provided file is not a valid CCv2 cover file!")
+        finally:
+            Launchpad.resume_read()
 
     @staticmethod
     def save(path: str) -> None:
@@ -54,22 +61,14 @@ class Project:
 
         Project.versions()[-1].dump(RuntimeVars().project)
 
-        # Hijack `shutil`'s copying function to always have `length=0`
-        # because this just makes it faster at compressing.
-        # `zipfile` uses `1024*2` here instead...
-        original_copy = shutil.copyfileobj
-
-        def new_copy(fsrc, fdst, length: int = 0) -> None:
-            original_copy(fsrc, fdst, 0)
-
-        shutil.copyfileobj = new_copy
+        fast = FastShutil()
 
         with zipfile.ZipFile(
             path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
         ) as zfile:
             Project._save_dir(zfile)
 
-        shutil.copyfileobj = original_copy
+        del fast
 
     @staticmethod
     def _save_dir(
@@ -131,7 +130,7 @@ class Project:
             data = np.pad(
                 data, ((0, pad_amount), (0, 0)), mode="constant", constant_values=0
             )
-            out += data
+            out += data * k.volume
 
         info = np.iinfo(constants.SAMPLE_DEPTH)
 

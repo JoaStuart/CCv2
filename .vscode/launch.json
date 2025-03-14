@@ -6,7 +6,7 @@
       "request": "launch",
       "program": "src/CCv2",
       "console": "integratedTerminal",
-      "args": ["--verbose"],
+      "args": ["--verbose", "/home/joa/Documents/Python/CCv2/proj.lpz"],
       "justMyCode": false
     }
   ]
