@@ -14,7 +14,6 @@ import logger
 from project.baking import BakedProject
 from ptypes import AudioRaw, int2
 from utils.json_wrapper import Json
-from utils.shutil_faster import FastShutil
 from utils.ui_property import UiProperty
 
 
@@ -58,17 +57,18 @@ class Project:
     @staticmethod
     def save(path: str) -> None:
         from utils.runtime import RuntimeVars
+        from launchpad.base import Launchpad
+
+        Launchpad.pause_read()
 
         Project.versions()[-1].dump(RuntimeVars().project)
-
-        fast = FastShutil()
 
         with zipfile.ZipFile(
             path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
         ) as zfile:
             Project._save_dir(zfile)
 
-        del fast
+        Launchpad.resume_read()
 
     @staticmethod
     def _save_dir(
