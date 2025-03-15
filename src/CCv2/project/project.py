@@ -25,6 +25,8 @@ class ProjButton:
 
 
 class Project:
+    CURRENT_PROJECT: "UiProperty[Project]"
+
     @staticmethod
     def load(path: str) -> None:
         from launchpad.base import Launchpad
@@ -42,12 +44,10 @@ class Project:
 
             for v in Project.versions():
                 if v.check():
-                    from utils.runtime import RuntimeVars
-
                     p = v.load()
                     p.load_path = path
 
-                    RuntimeVars().project = p
+                    Project.CURRENT_PROJECT.v = p
                     return
 
             raise RuntimeError("The provided file is not a valid CCv2 cover file!")
@@ -56,12 +56,11 @@ class Project:
 
     @staticmethod
     def save(path: str) -> None:
-        from utils.runtime import RuntimeVars
         from launchpad.base import Launchpad
 
         Launchpad.pause_read()
 
-        Project.versions()[-1].dump(RuntimeVars().project)
+        Project.versions()[-1].dump(Project.CURRENT_PROJECT.v)
 
         with zipfile.ZipFile(
             path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
@@ -111,6 +110,7 @@ class Project:
 
         self.timestamps: UiProperty[list[ProjButton]] = UiProperty([])
         self.timestamps.add_listener(lambda a: a.sort(key=lambda t: t.time))
+        self.timestamps.add_listener(lambda _: Project.CURRENT_PROJECT.v.bake())
 
         self.title: str = ""
         self.load_path: Optional[str] = None
@@ -141,6 +141,9 @@ class Project:
             return 0
 
         return max(t.track.shape[0] for t in self.tracks.v)
+
+
+Project.CURRENT_PROJECT = UiProperty(Project())
 
 
 class ProjectLoader(abc.ABC):

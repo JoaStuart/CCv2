@@ -24,6 +24,9 @@ class GeneratorWindow(Window):
         gen = Generator()
         gen.color_receiver.add_listener(lambda s: self._color_switch(s)(False))  # type: ignore
 
+    def position(self, full_size: int2, size: int2) -> int2:
+        return 0, full_size[1] - size[1]
+
     def _get_primary_lightmap(self) -> Lightmap:
         if len(Launchpad.OUTPUTS) == 0:
             return Lightmap.MAPS["Mk2+Realism"]

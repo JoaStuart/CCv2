@@ -1,26 +1,22 @@
 import abc
 import os
-from threading import Timer
 import threading
+import logger
 import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 import dearpygui.dearpygui as dpg
 
 import constants
-from lighting.keyframes import Keyframes
 from lighting.lightmanager import LightManager, LightReceiver
 from ptypes import int2, int4
 from singleton import singleton
 from utils.color import col
-
-pygame.init()
-pygame.font.init()
 
 
 @singleton
 class WindowManager:
     def __init__(self) -> None:
         dpg.create_context()
-        self._window_ids: list[str | int] = []
+        self._windows: list[Window] = []
 
     def open(self, *windows: "Window") -> None:
         for w in windows:
@@ -30,8 +26,8 @@ class WindowManager:
                 no_resize=True,
                 autosize=True,
                 no_close=True,
-            ) as win:
-                self._window_ids.append(win)
+            ):
+                self._windows.append(w)
                 w.setup()
 
     def close(self) -> None:
@@ -43,16 +39,31 @@ class WindowManager:
             title="CC/v2",
             width=1920,
             height=1080,
-            small_icon=os.path.join(constants.INTERNAL_ICONS, "icon.ico"),
-            large_icon=os.path.join(constants.INTERNAL_ICONS, "icon.ico"),
+            small_icon=os.path.join(constants.INTERNAL_ICONS, "icon.png"),
+            large_icon=os.path.join(constants.INTERNAL_ICONS, "icon.png"),
         )
         dpg.setup_dearpygui()
         dpg.show_viewport()
+        dpg.set_viewport_resize_callback(self.position_windows)
 
+        dpg.set_frame_callback(2, self.position_windows)
         ui_show.set()
         dpg.start_dearpygui()
 
         self.close()
+
+    def position_windows(self) -> None:
+        full_size = dpg.get_viewport_width(), dpg.get_viewport_height()
+
+        for w in self._windows:
+            size = dpg.get_item_width(w.tag), dpg.get_item_height(w.tag)
+
+            if size[0] is None or size[1] is None:
+                logger.warning("Could not determine size for window %s", w.tag)
+                continue
+
+            pos = w.position(full_size, size)  # type: ignore # We tested for None above
+            dpg.set_item_pos(w.tag, list(pos))
 
     def selected_theme(self) -> None:
         with dpg.theme() as selected_theme:
@@ -101,6 +112,9 @@ class Window(abc.ABC):
     @abc.abstractmethod
     def setup(self) -> None:
         pass
+
+    def position(self, full_size: int2, size: int2) -> int2:
+        return 0, 0
 
 
 class LaunchpadWindow(Window, LightReceiver):
@@ -191,14 +205,12 @@ class LaunchpadWindow(Window, LightReceiver):
         dpg.configure_item(f"{x}:{y}", default_value=c.rgb)
 
 
-def open_and_run() -> int:
-    ui_show = threading.Event()
-    LightManager().play_raw(Keyframes.FRAME_CACHE["__splash"].persistent(ui_show))
-
+def open_and_run(splash_finish: threading.Event) -> None:
     from ui.generator_ui import GeneratorWindow
     from ui.track_ui import TrackWindow
     from ui.props_ui import PropsWindow
     from ui.proj_ui import ProjectWindow
+    from ui.pool_ui import PoolWindow
 
     man = WindowManager()
     man.open(
@@ -207,7 +219,7 @@ def open_and_run() -> int:
         TrackWindow(),
         PropsWindow(),
         ProjectWindow(),
+        PoolWindow(),
     )
 
-    man.start(ui_show)
-    return 0
+    man.start(splash_finish)

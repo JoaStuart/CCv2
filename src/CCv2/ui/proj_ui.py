@@ -5,12 +5,13 @@ import dearpygui.dearpygui as dpg
 from audio.audio_route import AudioRouter
 from audio.track import AudioTrack
 import constants
+from launchpad.base import Launchpad
 from launchpad.route import LaunchpadReceiver
 from lighting.generator import Generator
 from project.project import Project
+from ptypes import int2
 from ui.main_ui import Window
 from ui.track_ui import TrackWindow
-from utils.runtime import RuntimeVars
 
 
 class ProjectWindow(Window, LaunchpadReceiver):
@@ -20,22 +21,37 @@ class ProjectWindow(Window, LaunchpadReceiver):
     def __init__(self) -> None:
         super().__init__("Project", "project")
 
+    def position(
+        self, full_size: tuple[int, int], size: tuple[int, int]
+    ) -> tuple[int, int]:
+        return full_size[0] - size[0], 0
+
+    def _spacer(self) -> None:
+        dpg.add_spacer(height=10)
+        dpg.add_separator()
+        dpg.add_spacer(height=10)
+
     def setup(self) -> None:
         proj = self._project()
 
         self._draw_save_dialog()
         self._draw_menu()
-        dpg.add_separator()
-        self._draw_router()
-
-        dpg.add_separator()
         self._draw_info(proj)
 
-        dpg.add_separator()
+        self._spacer()
+        self._draw_router()
+
+        self._spacer()
         self._draw_track_volumes()
 
+        self._spacer()
+        dpg.add_button(
+            label="Move windows [DEBUG]",
+            callback=lambda: self.main.position_windows(),
+        )
+
     def _draw_track_volumes(self) -> None:
-        proj = RuntimeVars().project
+        proj = Project.CURRENT_PROJECT.v
 
         for t in proj.tracks.v:
             with dpg.group(horizontal=True):
@@ -168,24 +184,17 @@ class ProjectWindow(Window, LaunchpadReceiver):
                 f"{round(proj.max_length() / constants.SAMPLE_RATE, ndigits=1)}s"
             )
 
-        with dpg.item_handler_registry(tag="focus_proj"):
-            dpg.add_item_focus_handler(callback=self._focus)
-        dpg.bind_item_handler_registry("track", "focus_proj")
-
-    def _focus(self) -> None:
-        LaunchpadReceiver.request_input(self)
-
     def _project(self) -> Project:
-        return RuntimeVars().project
+        return Project.CURRENT_PROJECT.v
 
     def note_on(self, x: int, y: int) -> None:
         proj = self._project().baked
         if not proj:
             return
 
-        aud = proj.get(RuntimeVars().page.v, (x, y))
+        aud = proj.get(Launchpad.PAGE.v, (x, y))
 
-        if not aud:
+        if aud is None:
             return
 
         AudioRouter().play(aud)

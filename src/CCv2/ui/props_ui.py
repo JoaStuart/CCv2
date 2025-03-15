@@ -13,6 +13,9 @@ class PropsWindow(Window):
     def __init__(self) -> None:
         super().__init__("Properties", "props")
 
+    def position(self, full_size: int2, size: int2) -> int2:
+        return full_size[0] - size[0], full_size[1] - size[1]
+
     def setup(self) -> None:
         self.main.disabled_theme()
 

@@ -11,6 +11,7 @@ from lighting.lightmap import Lightmap
 import logger
 from ptypes import int2
 from utils.color import col
+from utils.ui_property import UiProperty
 
 
 midi.init()
@@ -29,6 +30,8 @@ class Launchpad(abc.ABC):
     OUTPUTS: "list[LaunchpadOut]" = []
 
     UNPAUSE_READ: threading.Event = threading.Event()
+
+    PAGE: UiProperty[int] = UiProperty(0)
 
     @staticmethod
     @abc.abstractmethod

@@ -1,8 +1,9 @@
 import math
-from re import L
-from typing import Any, Optional
+from typing import Optional
 import dearpygui.dearpygui as dpg
 import numpy as np
+from launchpad.base import Launchpad
+from ptypes import int2
 import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 
 from audio.audio_route import audio_router
@@ -11,12 +12,10 @@ from launchpad.route import LaunchpadReceiver
 import logger
 from project.project import ProjButton, Project
 from audio.track import AudioTrack
-from ptypes import int3
 from singleton import singleton
 from ui.main_ui import Window
 from ui.props_ui import PropsWindow
 from utils.color import col
-from utils.runtime import RuntimeVars
 from utils.ui_property import UiProperty
 
 
@@ -49,18 +48,23 @@ class TrackWindow(Window, LaunchpadReceiver):
         self._spp = 1 / self._pps
         self._active_channel: Optional[pygame.mixer.Channel] = None
 
-        RuntimeVars().page.add_listener(lambda _: self.redraw())
+        Launchpad.PAGE.add_listener(lambda _: self.redraw())
 
         proj = self._project()
         proj.tracks.add_listener(self._track_change)
         proj.timestamps.add_listener(lambda _: self.redraw())
+
+    def position(
+        self, full_size: tuple[int, int], size: tuple[int, int]
+    ) -> tuple[int, int]:
+        return full_size[0] // 2 - size[0] // 2, full_size[1] - size[1]
 
     def _track_change(self, _tracks: list[AudioTrack]) -> None:
         self._waveform_redraw = True
         self.redraw()
 
     def _project(self) -> Project:
-        return RuntimeVars().project
+        return Project.CURRENT_PROJECT.v
 
     def _px_per_sample(self, width: int) -> float:
         samples_in_view = self.SECONDS_PER_SCREEN * constants.SAMPLE_RATE
@@ -211,7 +215,7 @@ class TrackWindow(Window, LaunchpadReceiver):
         max_height_tracks = len(self._project().tracks.v) * 25
 
         for t in self._project().timestamps.v:
-            color = (255, 0, 0) if t.page == RuntimeVars().page.v else (50, 10, 0)
+            color = (255, 0, 0) if t.page == Launchpad.PAGE.v else (50, 10, 0)
 
             dpg.draw_line(
                 (t.time * constants.SAMPLE_RATE * self._px_per_sample(700), top),
@@ -234,13 +238,11 @@ class TrackWindow(Window, LaunchpadReceiver):
             )
 
     def note_on(self, x: int, y: int) -> None:
-        print(x, y)
-
         cur_sample = self._pos_cur.v * self._spp
         cur_time = cur_sample / constants.SAMPLE_RATE
 
         t = self._project().timestamps
-        t.v.append(ProjButton(cur_time, (x, y), RuntimeVars().page.v))
+        t.v.append(ProjButton(cur_time, (x, y), Launchpad.PAGE.v))
 
         t.change()
         self._pos_cur.change()
