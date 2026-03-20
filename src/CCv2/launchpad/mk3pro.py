@@ -63,6 +63,9 @@ class LaunchpadMk3Pro(Launchpad):
     def lightmap(self) -> str:
         return "Mk2+Realism"
 
+    def check_bounds(self, pos: tuple[int, int]) -> bool:
+        return pos[0] >= -1 and pos[0] <= 8 and pos[1] >= -1 and pos[1] <= 9
+
     def _welcome_messages(self) -> list[list[int]]:
         return [
             [
