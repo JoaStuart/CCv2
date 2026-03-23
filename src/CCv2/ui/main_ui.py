@@ -1,15 +1,15 @@
 import abc
 import os
 import threading
-import logger
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
+import pygame
 import dearpygui.dearpygui as dpg
 
-import constants
-from lighting.lightmanager import LightManager, LightReceiver
-from ptypes import int2, int4
-from singleton import singleton
-from utils.color import col
+from .. import logger
+from .. import constants
+from ..lighting.lightmanager import LightManager, LightReceiver
+from ..ptypes import int2, int4
+from ..singleton import singleton
+from ..utils.color import col
 
 
 @singleton

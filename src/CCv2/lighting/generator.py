@@ -5,15 +5,15 @@ import threading
 from typing import Optional
 import dearpygui.dearpygui as dpg
 
-import constants
-from launchpad.base import Launchpad
-from launchpad.route import LaunchpadReceiver
-from lighting.keyframes import Keyframes, PersistentKeyframes
-from lighting.lightmanager import LightManager
-from ptypes import int2
-from singleton import singleton
-from utils.ui_property import UiProperty
-from utils.color import col
+from .. import constants
+from ..launchpad.base import Launchpad
+from ..launchpad.route import LaunchpadReceiver
+from ..lighting.keyframes import Keyframes, PersistentKeyframes
+from ..lighting.lightmanager import KfData, LightManager
+from ..ptypes import int2
+from ..singleton import singleton
+from ..utils.ui_property import UiProperty
+from ..utils.color import col
 
 
 @singleton

@@ -2,9 +2,9 @@ import abc
 import os
 from typing import ItemsView
 
-import constants
-import logger
-from utils.color import col
+from .. import constants
+from .. import logger
+from ..utils.color import col
 
 
 class Lightmap:

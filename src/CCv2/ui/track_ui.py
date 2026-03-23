@@ -2,21 +2,20 @@ import math
 from typing import Optional
 import dearpygui.dearpygui as dpg
 import numpy as np
-from launchpad.base import Launchpad
-from ptypes import int2
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
+import pygame
 
-from audio.audio_route import audio_router
-import constants
-from launchpad.route import LaunchpadReceiver
-import logger
-from project.project import ProjButton, Project
-from audio.track import AudioTrack
-from singleton import singleton
-from ui.main_ui import Window
-from ui.props_ui import PropsWindow
-from utils.color import col
-from utils.ui_property import UiProperty
+from ..audio.audio_route import audio_router
+from ..launchpad.base import Launchpad
+from .. import constants
+from ..launchpad.route import LaunchpadReceiver
+from .. import logger
+from ..project.project import ProjButton, Project
+from ..audio.track import AudioTrack
+from ..singleton import singleton
+from ..ui.main_ui import Window
+from ..ui.props_ui import PropsWindow
+from ..utils.color import col
+from ..utils.ui_property import UiProperty
 
 
 @singleton

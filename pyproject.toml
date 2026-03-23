@@ -1,0 +1,23 @@
+[project]
+name = "CCv2"
+version = "2.0.1"
+description = "A python launchpad cover creator"
+readme = "README.md"
+requires-python = ">=3.14"
+license = { text = "MIT" }
+authors = [
+    { name = "Joa", email = "80101844+JoaStuart@users.noreply.github.com" }
+]
+
+dependencies = [
+    "pygame==2.6.1",
+    "numpy==2.4.2",
+    "scipy==1.17.0",
+]
+
+[build-system]
+requires = ["setuptools>=80", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

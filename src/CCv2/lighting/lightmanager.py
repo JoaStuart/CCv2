@@ -1,12 +1,11 @@
 import abc
 import threading
-from daemon_thread import DaemonThread
-from launchpad.base import Launchpad
-from lighting.keyframes import Keyframes
-import logger
-from ptypes import int2
-from singleton import singleton
-from utils.color import col
+from ..utils.daemon_thread import DaemonThread
+from ..launchpad.base import Launchpad
+from ..lighting.keyframes import Keyframes
+from ..ptypes import int2
+from ..singleton import singleton
+from ..utils.color import col
 
 type Kf = dict[int2, col]
 

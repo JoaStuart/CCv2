@@ -2,7 +2,7 @@ import abc
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from launchpad.base import LaunchpadIn
+    from ..launchpad.base import LaunchpadIn
 
 
 class LaunchpadRouter:
@@ -10,7 +10,7 @@ class LaunchpadRouter:
         self._lp = lp
 
     def route(self, cmd: int, a0: int, a1: int, _: int) -> None:
-        from launchpad.base import Launchpad
+        from ..launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
         if cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON:

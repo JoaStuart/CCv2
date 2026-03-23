@@ -2,16 +2,16 @@ import os
 from typing import Callable
 import dearpygui.dearpygui as dpg
 
-from audio.audio_route import AudioRouter
-from audio.track import AudioTrack
-import constants
-from launchpad.base import Launchpad
-from launchpad.route import LaunchpadReceiver
-from lighting.generator import Generator
-from project.project import Project
-from ptypes import int2
-from ui.main_ui import Window
-from ui.track_ui import TrackWindow
+from ..audio.audio_route import AudioRouter
+from ..audio.track import AudioTrack
+from .. import constants
+from ..launchpad.base import Launchpad
+from ..launchpad.route import LaunchpadReceiver
+from ..lighting.generator import Generator
+from ..lighting.lightmanager import LightManager
+from ..ptypes import int2
+from ..ui.main_ui import Window
+from ..ui.track_ui import TrackWindow
 
 
 class ProjectWindow(Window, LaunchpadReceiver):

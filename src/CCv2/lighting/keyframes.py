@@ -6,10 +6,10 @@ import threading
 import time
 from typing import Optional
 
-import constants
-import logger
-from ptypes import int2
-from utils.color import col
+from .. import constants
+from .. import logger
+from ..ptypes import int2
+from ..utils.color import col
 
 
 type Kf = dict[int2, col]

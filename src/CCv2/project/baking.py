@@ -1,9 +1,10 @@
 from typing import TYPE_CHECKING, Optional
-import constants
-from ptypes import AudioRaw, int2
+
+from .. import constants
+from ..ptypes import AudioRaw, int2
 
 if TYPE_CHECKING:
-    from project.project import Project
+    from ..project.project import Project
 
 
 type PagedAudio = dict[tuple[int, int2], list[AudioRaw]]

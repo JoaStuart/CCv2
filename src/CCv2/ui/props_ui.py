@@ -1,8 +1,8 @@
 import dearpygui.dearpygui as dpg
 
-from ptypes import int2
-from singleton import singleton
-from ui.main_ui import Window
+from ..ptypes import int2
+from ..singleton import singleton
+from ..ui.main_ui import Window
 
 
 @singleton

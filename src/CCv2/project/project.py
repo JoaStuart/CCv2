@@ -8,13 +8,13 @@ from typing import Optional
 import zipfile
 import numpy as np
 
-import constants
-from audio.track import AudioTrack
-import logger
-from project.baking import BakedProject
-from ptypes import AudioRaw, int2
-from utils.json_wrapper import Json
-from utils.ui_property import UiProperty
+from .. import constants
+from ..audio.track import AudioTrack
+from .. import logger
+from ..project.baking import BakedProject
+from ..ptypes import AudioRaw, int2
+from ..utils.json_wrapper import Json
+from ..utils.ui_property import UiProperty
 
 
 class ProjButton:

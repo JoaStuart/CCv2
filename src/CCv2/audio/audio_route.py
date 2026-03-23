@@ -4,13 +4,13 @@ import time
 from typing import Callable, Optional
 import numpy as np
 import soundfile as sf
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
-import pygame.mixer as mx  # type: ignore
+import pygame
+import pygame.mixer as mx
 
-import constants
-from daemon_thread import DaemonThread
-from ptypes import AudioRaw
-from singleton import singleton
+from .. import constants
+from ..utils.daemon_thread import DaemonThread
+from ..ptypes import AudioRaw
+from ..singleton import singleton
 
 mx.init(
     frequency=constants.SAMPLE_RATE,

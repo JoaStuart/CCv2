@@ -3,15 +3,15 @@ import re
 import threading
 import time
 from typing import Optional
-import pygame.midi as midi  # type: ignore # Pylance cannot resolve self-compiled pygame
+import pygame.midi as midi
 
-from daemon_thread import DaemonThread
-from launchpad.route import LaunchpadRouter
-from lighting.lightmap import Lightmap
-import logger
-from ptypes import int2
-from utils.color import col
-from utils.ui_property import UiProperty
+from ..utils.daemon_thread import DaemonThread
+from ..launchpad.route import LaunchpadRouter
+from ..lighting.lightmap import Lightmap
+from .. import logger
+from ..ptypes import int2
+from ..utils.color import col
+from ..utils.ui_property import UiProperty
 
 
 midi.init()
@@ -48,7 +48,7 @@ class Launchpad(abc.ABC):
 
     @staticmethod
     def get_by_name_in(name: str) -> "Optional[type[LaunchpadIn]]":
-        from launchpad.mk3pro import LaunchpadMk3ProIn
+        from ..launchpad.mk3pro import LaunchpadMk3ProIn
 
         pad_types = [LaunchpadMk3ProIn]
         for t in pad_types:
@@ -58,7 +58,7 @@ class Launchpad(abc.ABC):
 
     @staticmethod
     def get_by_name_out(name: str) -> "Optional[type[LaunchpadOut]]":
-        from launchpad.mk3pro import LaunchpadMk3ProOut
+        from ..launchpad.mk3pro import LaunchpadMk3ProOut
 
         pad_types = [LaunchpadMk3ProOut]
         for t in pad_types:

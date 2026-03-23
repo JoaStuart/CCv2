@@ -1,9 +1,11 @@
 import os
 import numpy as np
 
-import constants
-import logger
-from ptypes import AudioRaw
+from ..utils.data_uri import make_data_uri
+
+from .. import constants
+from .. import logger
+from ..ptypes import AudioRaw
 
 
 class AudioTrack:

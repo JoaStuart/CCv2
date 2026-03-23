@@ -4,14 +4,14 @@ from typing import Callable, Optional
 import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
 import dearpygui.dearpygui as dpg
 
-import constants
-from launchpad.base import Launchpad
-from launchpad.route import LaunchpadReceiver, LaunchpadRouter
-from lighting.generator import Generator
-from lighting.lightmap import Lightmap
-from ptypes import int2, int3, int4
-from ui.main_ui import Window
-from utils.color import col
+from .. import constants
+from ..launchpad.base import Launchpad
+from ..launchpad.route import LaunchpadReceiver
+from ..lighting.generator import Generator
+from ..lighting.lightmap import Lightmap
+from ..ptypes import int2, int3, int4
+from ..ui.main_ui import Window
+from ..utils.color import col
 
 
 class GeneratorWindow(Window):

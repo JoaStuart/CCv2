@@ -1,7 +1,7 @@
 import threading
 
-from lighting.keyframes import Keyframes
-from lighting.lightmanager import LightManager
+from ..lighting.keyframes import Keyframes
+from ..lighting.lightmanager import LightManager
 
 
 def _play(anim: str) -> threading.Event:

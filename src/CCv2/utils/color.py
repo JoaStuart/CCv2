@@ -1,6 +1,6 @@
 from typing import Callable
 
-from ptypes import int3
+from ..ptypes import int3
 
 
 type operand = int | float | col
