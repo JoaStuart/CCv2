@@ -117,7 +117,7 @@ class Generator(LaunchpadReceiver):
     def _display(self, pos: int2, color: col, off: threading.Event) -> None:
         kf = PersistentKeyframes(off)
         kf.append({pos: color})
-        LightManager().play_raw(kf)
+        LightManager().play_raw(KfData(kf))
 
     def note_off(self, x: int, y: int) -> None:
         return super().note_off(x, y)
@@ -150,7 +150,7 @@ class Generator(LaunchpadReceiver):
             for k, v in self._active_keys.items():
                 v.off_evt.set()
 
-            end = LightManager().play_raw(self._keyframe)
+            end = LightManager().play_raw(KfData(self._keyframe))
             end.wait()
 
             self.display_all()

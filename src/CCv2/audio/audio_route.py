@@ -3,7 +3,6 @@ import threading
 import time
 from typing import Callable, Optional
 import numpy as np
-import soundfile as sf
 import pygame
 import pygame.mixer as mx
 
@@ -64,6 +63,9 @@ class AudioRouter(DaemonThread):
 
         time.sleep(1 / constants.AUDIO_TICKS)
 
+    def thread_cleanup(self) -> None:
+        return self._data_event.set()
+
     def channel(self) -> mx.Channel:
         return mx.find_channel(force=True)
 
@@ -74,16 +76,27 @@ class AudioRouter(DaemonThread):
         self, data: AudioRaw, callback: Optional[Callable[[float], None]] = None
     ) -> mx.Channel:
         c = self.channel()
-        c.play(self._sound(data))
+        sound = self._sound(data)
+        c.play(sound)
 
-        if callback:
-            start = time.time()
-            self._playing_audio.append(
-                (c, start, callback, data.shape[0] / constants.SAMPLE_RATE)
+        start = time.time()
+        self._playing_audio.append(
+            (
+                c,
+                start,
+                callback if callback is not None else lambda _: None,
+                data.shape[0] / constants.SAMPLE_RATE,
             )
-            self._data_event.set()
+        )
+        self._data_event.set()
 
         return c
+
+    def stop_all(self) -> None:
+        for c in self._playing_audio:
+            c[0].stop()
+
+        self._playing_audio.clear()
 
     def stop(self, channel: mx.Channel) -> None:
         channel.stop()
@@ -99,4 +112,4 @@ class AudioRouter(DaemonThread):
         self._playing_audio.pop(target)
 
 
-audio_router = AudioRouter()
+AudioRouter()

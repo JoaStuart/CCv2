@@ -1,6 +1,8 @@
 import abc
 import threading
 
+from .. import logger
+
 
 class DaemonThread(abc.ABC):
     ACTIVE: "list[DaemonThread]" = []
@@ -27,8 +29,20 @@ class DaemonThread(abc.ABC):
             self.thread_loop()
 
     def cleanup(self) -> None:
+        logger.debug("Cleaning up daemon thread %s", self.__class__.__name__)
+
         self._running = False
+        self.thread_cleanup()
         self._thread.join(DaemonThread.WAIT_TIMEOUT)
+
+        if self._thread.is_alive():
+            logger.info(
+                "Daemon thread %s did not cleanup within given time!",
+                self.__class__.__name__,
+            )
+
+    def thread_cleanup(self) -> None:
+        pass
 
     @abc.abstractmethod
     def thread_loop(self) -> None:

@@ -1,4 +1,4 @@
-from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
+from .base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
 class LaunchpadMk2(Launchpad):

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CC/v2 Virtual Launchpad</title>
+    <style>
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      body {
+        position: absolute;
+        left: 0;
+        top: 0;
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: #ff8f8f;
+      }
+
+      #launchpad {
+        width: min(100vw, 100vh);
+        height: min(100vw, 100vh);
+        aspect-ratio: 1/1;
+        justify-self: center;
+
+        display: grid;
+        grid-template-columns: repeat(10, 1fr);
+        grid-template-rows: repeat(9, 1fr) 0.5fr 0.5fr;
+        align-items: center;
+        justify-items: center;
+        cursor: pointer;
+      }
+      #launchpad .lpbutton {
+        display: inline-block;
+        width: 90%;
+        height: 90%;
+        --r: 255;
+        --g: 210;
+        --b: 210;
+        outline: 1px solid black;
+        background-color: rgb(var(--r), var(--g), var(--b));
+      }
+      #launchpad .outer {
+        --r: 102;
+        --g: 57;
+        --b: 57;
+      }
+      #launchpad .half {
+        height: 80%;
+      }
+      #launchpad .logo {
+        width: 80%;
+        height: 80%;
+      }
+      #launchpad .shift {
+        width: 40%;
+        height: 40%;
+      }
+      #launchpad .page {
+        outline: 1px solid lightgray;
+      }
+
+      #fullscreen {
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        background: none;
+        border: none;
+        aspect-ratio: 1/1;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="launchpad"></div>
+    <button id="fullscreen" onclick="toggleFullscreen()">
+      <img src="feathericons/icons/maximize.svg" />
+    </button>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const packPos = (x, y) => ((x + 1) << 4) | (y + 1);
+      const unpackPos = (pos) => ({ x: (pos >> 4) - 1, y: (pos & 0xf) - 1 });
+      const lp = $("launchpad");
+
+      for (let y = -1; y < 10; y++) {
+        for (let x = -1; x < 9; x++) {
+          const el = document.createElement("span");
+          const pack = packPos(x, y);
+          el.onclick = () => ws.send(new Uint8Array([pack]));
+
+          if (!(x == -1 && y >= 8) && !(x == 8 && y >= 8)) {
+            el.id = `${x};${y}`;
+            el.classList.add("lpbutton");
+
+            if (x == 8 && y == -1) {
+              el.classList.add("logo");
+            } else if (x == -1 && y == -1) {
+              el.classList.add("shift");
+            } else if (y >= 8) {
+              el.classList.add("half");
+            }
+
+            if (y == -1 || x == -1 || x == 8 || y >= 8) {
+              el.classList.add("outer");
+            }
+          }
+
+          lp.appendChild(el);
+        }
+      }
+
+      const ws = new WebSocket("/api/v1/lp");
+      ws.binaryType = "arraybuffer";
+      let alertImg = "about:blank";
+      ws.onclose = () => ($("fullscreen").querySelector("img").src = alertImg);
+
+      fetch("feathericons/icons/alert-triangle.svg")
+        .then((e) => {
+          console.log(e);
+          return e.blob();
+        })
+        .then((b) => {
+          console.log(b);
+          alertImg = URL.createObjectURL(b);
+          console.log(alertImg);
+        })
+        .catch((e) => {});
+
+      ws.onmessage = (event) => {
+        const data = new Uint8Array(event.data);
+        for (let i = 0; i < data.byteLength; i += 4) {
+          const { x, y } = unpackPos(data[i]);
+          const r = data[i + 1];
+          const g = data[i + 2];
+          const b = data[i + 3];
+
+          if (y >= 8 && (x < 0 || x > 7)) continue;
+
+          const el = $(`${x};${y}`).style;
+          if (r == 0 && g == 0 && b == 0) {
+            el.setProperty("--r", null);
+            el.setProperty("--g", null);
+            el.setProperty("--b", null);
+          } else {
+            el.setProperty("--r", r * 4);
+            el.setProperty("--g", g * 4);
+            el.setProperty("--b", b * 4);
+          }
+        }
+      };
+
+      const toggleFullscreen = () => {
+        if (ws.readyState > ws.OPEN) {
+          window.location.reload();
+        }
+
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+          $("fullscreen").querySelector("img").src =
+            "feathericons/icons/minimize.svg";
+        } else {
+          document.exitFullscreen();
+          $("fullscreen").querySelector("img").src =
+            "feathericons/icons/maximize.svg";
+        }
+      };
+    </script>
+  </body>
+</html>

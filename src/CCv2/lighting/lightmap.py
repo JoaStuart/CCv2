@@ -60,6 +60,27 @@ class Lightmap:
 
         return 0
 
+    def closest(self, c: col) -> int:
+        if sum(c.rgb) == 0:
+            return 0
+
+        if (v := self.vel(c)) != 0:
+            return v
+
+        best = 0
+        dist = 0xFFFFFF
+        for k, v in self._mappings.items():
+            if k == 0:
+                continue
+
+            d = c.hsldist(v)
+
+            if d < dist:
+                best = k
+                dist = d
+
+        return best
+
     def __len__(self) -> int:
         return len(self._mappings)
 

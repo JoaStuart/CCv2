@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CC/v2</title>
+    <link rel="stylesheet" href="index.css" />
+    <script src="preload.js"></script>
+  </head>
+  <body>
+    <div id="portrait">
+      <h1>Please use this website in landscape!</h1>
+    </div>
+
+    <!-- #region Top menu bar-->
+    <div id="menubar">
+      <div class="entry" onclick="menuCallback('filemenu')">
+        <span>File</span>
+        <div id="filemenu" class="menu" style="display: none">
+          <div class="line" id="newproject">
+            <span>New Project</span><span class="keycombo">Alt+N</span>
+          </div>
+          <div class="line" id="openproject">
+            <span>Open Project</span><span class="keycombo">Alt+O</span>
+          </div>
+          <div class="line" id="saveproject">
+            <span>Save Project</span><span class="keycombo">Alt+S</span>
+          </div>
+          <div class="line" id="saveasproject">
+            <span>Save Project As</span
+            ><span class="keycombo">Alt+Shift+S</span>
+          </div>
+          <div class="line" onclick="window.location.reload()">
+            <span>Reload</span
+            ><span class="keycombo">DEBUG</span>
+          </div>
+        </div>
+      </div>
+      <div class="entry" onclick="menuCallback('editmenu')">
+        <span>Edit</span>
+        <div id="editmenu" class="menu" style="display: none">
+          <div class="line" id="importsound">
+            <span>Import Soundtrack</span><span class="keycombo">Alt+I</span>
+          </div>
+          <div class="line" id="settings">
+            <span>Settings</span><span class="keycombo">Alt+P</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- #endregion -->
+
+    <!-- #region Settings UI -->
+    <div id="settingsui">
+      <div class="settingswindow">
+        <img src="feathericons/icons/x-square.svg" id="settingsclose" onclick="$('settingsui').style.display = 'none'"></img>
+        <div class="categories">
+          <div class="category" id="settingslaunchpad">Launchpad</div>
+        </div>
+        <div class="views">
+          <div class="view" id="settingslaunchpadview">
+            <table id="connlaunchpads">
+              <tbody></tbody>
+            </table>
+            <button id="launchpadrefresh">Refresh</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- #endregion -->
+
+    <!-- #region Applets -->
+    <div class="applets">
+      <!-- #region TopLeft VPAD-->
+      <div
+        class="applet topleft"
+        id="tl"
+        style="--bgcol: #ffaaaa; --bgactive: #ff8f8f"
+      >
+        <div id="launchpad"></div>
+        <div class="lpswitch tl" onclick="lpSwitch('tl')"></div>
+
+        <script>
+          const lp = $("launchpad");
+          for (let y = -1; y < 10; y++) {
+            for (let x = -1; x < 9; x++) {
+              const el = document.createElement("span");
+              el.onclick = () => lpClick(x, y);
+
+              if (!(x == -1 && y >= 8) && !(x == 8 && y >= 8)) {
+                el.id = `${x};${y}`;
+                el.classList.add("lpbutton");
+
+                if (x == 8 && y == -1) {
+                  el.classList.add("logo");
+                } else if (x == -1 && y == -1) {
+                  el.classList.add("shift");
+                } else if (y >= 8) {
+                  el.classList.add("half");
+                }
+
+                if (y == -1 || x == -1 || x == 8 || y >= 8) {
+                  el.classList.add("outer");
+                }
+              }
+
+              lp.appendChild(el);
+            }
+          }
+        </script>
+      </div>
+      <!-- #endregion -->
+      <!-- #region TopRight AudioTrack -->
+      <div
+        class="applet topright"
+        id="tr"
+        style="--bgcol: #ffffaa; --bgactive: #ffff8f"
+      >
+        <div
+          class="out trackbounds"
+          id="trackbounds"
+          style="--sec-per-screen: 2"
+        >
+          <div class="bttntrack" id="bttntrack"></div>
+          <div class="out track" id="track">
+            <img
+              src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVQIHWMAAQAABQABim28IAAAAABJRU5ErkJggg=="
+            />
+          </div>
+          <div class="lighttrack" id="lighttrack"></div>
+        </div>
+        <div class="out trackcontrols">
+          <button onclick="trackZoom(+0.5)">
+            <img src="feathericons/icons/minus-square.svg" />
+          </button>
+          <button id="trackback"><img src="feathericons/icons/skip-back.svg" /></button>
+          <button id="trackplay"><img src="feathericons/icons/play.svg" /></button>
+          <button onclick="trackZoom(-0.5)">
+            <img src="feathericons/icons/plus-square.svg" />
+          </button>
+        </div>
+        <div class="lpswitch tr" onclick="lpSwitch('tr')"></div>
+      </div>
+      <!-- #endregion -->
+      <!-- #region BottomLeft ProjectConfiguration -->
+      <div class="applet botleft" style="--bgcol: #aad5aa">
+        <div class="out projdata">
+          <h3>Current Project</h3>
+          <div class="options">
+            <span>Title</span>
+            <input type="text" id="projtitle" />
+            <span>Duration</span>
+            <input type="number" id="projduration" disabled />
+            <span>File</span>
+            <input type="text" id="projloadpath" disabled />
+            <button onclick="debugTransmit()">DEBUG</button>
+            <input type="text" id="debugtransmit" />
+          </div>
+        </div>
+        <div class="botleftright">
+          <div class="out curlight active" id="curlight">
+            <h3>Selected Light</h3>
+            <div class="options">
+              <span>Time</span>
+              <input type="number" id="lighttime" min="0" step="0.01" />
+              <span>Name</span>
+              <input type="text" id="lightname" />
+              <span>Duration</span>
+              <input type="number" id="lightduration" min="0" step="0.01" />
+              <span>Off. X</span>
+              <input type="number" id="lightoffx" step="1" />
+              <span>Off. Y</span>
+              <input type="number" id="lightoffy" step="1" />
+              <span>Persist</span>
+              <input type="checkbox" id="lightpersist" />
+              <span></span>
+              <button onclick="remove('light')">Remove</button>
+            </div>
+          </div>
+          <div class="out curbttn" id="curbttn">
+            <h3>Selected Button</h3>
+            <div class="options">
+              <span>Time</span>
+              <input type="number" id="bttntime" min="0" step="0.01" />
+              <span>X</span>
+              <input type="number" id="bttnx" step="1" />
+              <span>Y</span>
+              <input type="number" id="bttny" step="1" />
+              <span>Page</span>
+              <input type="number" id="bttnpage" min="0" max="7" step="1" />
+              <span></span>
+              <button onclick="remove('bttn')">Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- #endregion -->
+      <!-- #region BottomRight KeyFrameGenerator -->
+      <div
+        class="applet botright"
+        id="br"
+        style="--bgcol: #aaaaff; --bgactive: #8f8fff"
+      >
+        <div class="out kflist" id="kflist"></div>
+        <div class="botrightright">
+          <div class="out kfvelo">
+            <div class="kfveloleft" id="velol"></div>
+            <div class="kfveloright" id="velor"></div>
+            <div class="kfvelobot" id="velob"></div>
+            <script>
+              const l = document.getElementById("velol");
+              const r = document.getElementById("velor");
+              const b = document.getElementById("velob");
+
+              for (let i = 0; i < 64; i++) {
+                const lchild = document.createElement("span");
+                lchild.classList.add("kfvelobtn");
+                lchild.id = `vel${i}`;
+                lchild.onclick = () => lmClick(i);
+                elSetRGB(lchild, i * 2, i * 2, i * 2);
+                l.appendChild(lchild);
+
+                const rchild = document.createElement("span");
+                rchild.classList.add("kfvelobtn");
+                rchild.id = `vel${i + 64}`;
+                rchild.onclick = () => lmClick(i + 64);
+                elSetRGB(rchild, (i + 64) * 2, (i + 64) * 2, (i + 64) * 2);
+                r.appendChild(rchild);
+              }
+
+              for (let i = 0; i < 16; i++) {
+                const bchild = document.createElement("span");
+                bchild.classList.add("kfvelograd");
+                bchild.id = `velograd${i}`;
+                bchild.onclick = () =>
+                  apiSend({ type: "gradientremove", idx: i });
+                elSetRGB(bchild, 0, 0, 0);
+                b.appendChild(bchild);
+              }
+            </script>
+          </div>
+          <div class="out kfbuttons">
+            <div class="line">
+              <button onclick="genSend('clear')">
+                <img src="feathericons/icons/x-square.svg" alt="" title="Clear" />
+              </button>
+              <button onclick="genSend('back')">
+                <img src="feathericons/icons/skip-back.svg" alt="" title="Back" />
+              </button>
+              <span title="Frames" id="genframes"></span>
+              <button onclick="genSend('next')">
+                <img src="feathericons/icons/skip-forward.svg" alt="" title="Forward" />
+              </button>
+              <button onclick="genPreview()">
+                <img src="feathericons/icons/eye.svg" alt="" title="Preview" />
+              </button>
+            </div>
+
+            <div class="line">
+              <input type="text" placeholder="Name" id="kfname" />
+              <input
+                type="number"
+                placeholder="Time"
+                id="gentime"
+                value="0.3"
+                min="0"
+                step="0.01"
+              />
+              <button><img src="feathericons/icons/save.svg" alt="" title="Save" id="kfsave" /></button>
+            </div>
+            <div class="line">
+              <span>Type:</span>
+              <button
+                class="ltypebtn"
+                id="ltypestatic"
+                onclick="lightType('static')"
+              >
+                Static
+              </button>
+              <button
+                class="ltypebtn"
+                id="ltypegradient"
+                onclick="lightType('gradient')"
+              >
+                Gradient
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="lpswitch br" onclick="lpSwitch('br')"></div>
+      </div>
+      <!-- #endregion -->
+
+      <span id="version">CC/v2 V0.1</span>
+    </div>
+    <!-- #endregion -->
+
+    <audio src="about:blank" id="trackaudio" style="display: none;"></audio>
+
+    <script src="index.js"></script>
+  </body>
+</html>

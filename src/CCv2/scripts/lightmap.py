@@ -1,8 +1,8 @@
 import os
 
-import constants
-from lighting.lightmap import Lightmap
-from utils.color import col
+from .. import constants
+from ..lighting.lightmap import Lightmap
+from ..utils.color import col
 
 
 def create_lightmap() -> None:

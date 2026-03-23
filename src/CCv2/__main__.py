@@ -1,37 +1,42 @@
+import os
 import sys
-from threading import Timer
-import threading
+import argparse
 import time
 
-from daemon_thread import DaemonThread
-from launchpad.base import Launchpad
-import argparse
-
-from lighting.keyframes import Keyframes
-from lighting.lightmanager import LightManager
-from lighting.lightmap import Lightmap
-import logger
-from project.project import Project
-from scripts.lightmap import create_lightmap
-from ui.main_ui import open_and_run
-from utils.animations import load_animation, splash_animation
+from .utils.daemon_thread import DaemonThread
+from .launchpad.base import Launchpad
+from .lighting.keyframes import Keyframes
+from .lighting.lightmap import Lightmap
+from . import logger
+from .project.project import Project
+from .scripts import SCRIPTS
+from .utils.animations import load_animation, splash_animation
 
 
 def main() -> None:
+    """Run the project"""
+
     parser = argparse.ArgumentParser("CC/v2", description="CoverCreator version 2")
-    parser.add_argument("--lightmap", "-l", action="store_true")
+    for n, _ in SCRIPTS:
+        parser.add_argument(f"--{n}", action="store_true")
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--oldui", action="store_true")
+    parser.add_argument("--vpad", action="store_true")
     parser.add_argument("file", nargs="?")
 
     args = parser.parse_args(sys.argv[1:])
 
     logger.init(args.verbose)
 
-    if args.lightmap:
-        create_lightmap()
-        sys.exit(0)
+    for name, script in SCRIPTS:
+        if getattr(args, name):
+            script()
+            sys.exit(0)
 
-    # Open and load thigns
+    logger.debug("Clearing cache directory")
+    Project.clear()
+
+    # Open and load things
     Lightmap.load_all()
     Keyframes.load_internal()
     Launchpad.open_all()
@@ -39,9 +44,11 @@ def main() -> None:
 
     # Load project
     if args.file:
+        logger.info("Loading project %s", args.file)
         load_finish = load_animation()
 
         Project.load(args.file)
+        Project.CURRENT_PROJECT.v.bake()
 
         load_finish.set()
 
@@ -49,7 +56,12 @@ def main() -> None:
 
     Launchpad.resume_read()
 
-    open_and_run(splash_finish)
+    if args.oldui:
+        from .ui.main_ui import open_and_run
+    else:
+        from .ui.web_ui import open_and_run
+
+    open_and_run(splash_finish, args)
 
 
 if __name__ == "__main__":
