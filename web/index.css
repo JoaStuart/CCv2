@@ -1,0 +1,559 @@
+body {
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  padding: 0;
+
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    "Open Sans",
+    "Helvetica Neue",
+    sans-serif;
+  font-size: 1.5vh;
+}
+
+#portrait {
+  display: none;
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  z-index: 1000;
+  background-color: white;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+@media screen and (orientation: portrait) {
+  #portrait {
+    display: flex !important;
+  }
+}
+
+#menubar {
+  width: 100vw;
+  height: 25px;
+  background-color: white;
+  z-index: 100;
+  user-select: none;
+}
+
+#menubar .entry {
+  display: inline-block;
+  padding-left: 10px;
+  padding-right: 10px;
+  height: 100%;
+  align-content: center;
+  cursor: pointer;
+}
+#menubar .entry:hover {
+  background-color: lightgray;
+}
+#menubar .entry.active {
+  background-color: lightgray;
+}
+
+#menubar .menu {
+  position: absolute;
+  background-color: white;
+  margin-top: 3px;
+  margin-left: -10px;
+  z-index: 10;
+}
+
+#menubar .menu .line {
+  height: 20px;
+  align-content: center;
+  width: 200px;
+  padding: 2px 7px;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+#menubar .menu .line:hover {
+  background-color: lightgray;
+}
+#menubar .keycombo {
+  font-size: 75%;
+}
+
+.out {
+  outline: 1px solid black;
+}
+
+.applets {
+  position: absolute;
+  width: 100%;
+  height: calc(100% - 25px);
+  top: 25px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  overflow: hidden;
+}
+.applet {
+  position: relative;
+  width: 40%;
+  height: 40%;
+  padding: calc((100vh - 25px) / 20) 5%;
+  background-color: var(--bgcol);
+}
+.applet.active {
+  background-color: var(--bgactive);
+}
+.topleft {
+  display: flex;
+  flex-direction: row;
+  justify-content: baseline;
+  align-items: center;
+}
+#launchpad {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 1/1;
+  justify-self: center;
+
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(9, 1fr) 0.5fr 0.5fr;
+  align-items: center;
+  justify-items: center;
+  cursor: pointer;
+}
+#launchpad .lpbutton {
+  display: inline-block;
+  width: 90%;
+  height: 90%;
+  --r: 255;
+  --g: 210;
+  --b: 210;
+  outline: 1px solid black;
+  background-color: rgb(var(--r), var(--g), var(--b));
+}
+#launchpad .outer {
+  --r: 102;
+  --g: 57;
+  --b: 57;
+}
+#launchpad .half {
+  height: 80%;
+}
+#launchpad .logo {
+  width: 80%;
+  height: 80%;
+}
+#launchpad .shift {
+  width: 40%;
+  height: 40%;
+}
+#launchpad .page {
+  outline: 1px solid lightgray;
+}
+
+.topright {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+.trackbounds {
+  width: calc(100% - 2vw);
+  height: calc(75% - 2.5vh - 2vh);
+  margin-bottom: 2.5vh;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  padding: 1vh 1vw;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+}
+.trackbounds .track {
+  --timestamp: 0.3;
+  width: calc(var(--sec-duration) / var(--sec-per-screen) * 100%);
+  height: 25%;
+  position: relative;
+  margin-bottom: 1.5vh;
+
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  image-rendering: -webkit-optimize-contrast;
+}
+.trackbounds .track img {
+  width: 100%;
+  height: 100%;
+}
+.trackbounds .track::before {
+  content: "";
+  display: block;
+  position: absolute;
+  width: 1px;
+  height: 100%;
+  background-color: red;
+  margin-left: calc(var(--timestamp) / var(--sec-duration) * 100%);
+}
+.trackbounds .lighttrack {
+  position: relative;
+  width: calc(var(--sec-duration) / var(--sec-per-screen) * 100%);
+  height: 50%;
+}
+.trackbounds .light {
+  --rank: 0;
+  position: absolute;
+  height: 20%;
+  outline: 1px solid black;
+  margin-top: calc(var(--rank) * 3vh);
+  margin-left: calc(var(--time) / var(--sec-duration) * 100%);
+  width: calc(var(--duration) / var(--sec-duration) * 100%);
+  display: flex;
+  align-items: center;
+  font-size: 75%;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+  text-align: center;
+  overflow: hidden;
+}
+.trackbounds .light.select {
+  outline: 1px solid darkgray;
+}
+.trackbounds .bttntrack {
+  position: relative;
+  width: calc(var(--sec-duration) / var(--sec-per-screen) * 100%);
+  height: 2vh;
+  margin-top: 1.5vh;
+}
+.trackbounds .bttntrack .bttn {
+  position: absolute;
+  width: 1vw;
+  height: 100%;
+  box-shadow: 1px -1px 0px 0px black;
+  margin-left: calc(var(--time) / var(--sec-duration) * 100% - 1vw);
+  cursor: pointer;
+}
+.trackbounds .bttntrack .bttn.select {
+  box-shadow: 1px -1px 0px 0px darkgray;
+}
+.trackcontrols {
+  width: 100%;
+  height: calc(25% - 2.5vh);
+  margin-top: 2.5vh;
+
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 1vw;
+}
+.trackcontrols button {
+  height: 50%;
+  aspect-ratio: 1/1;
+  width: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.trackcontrols button > img {
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+}
+
+.botleft {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.projdata {
+  width: calc(50% - 2.5vw - 3vw);
+  height: 100%;
+  margin-right: 2.5vw;
+  padding: 0 1.5vw;
+  display: flex;
+  flex-direction: column;
+}
+.projdata .options {
+  display: grid !important;
+  grid-template-columns: 1fr 2fr;
+  width: 100%;
+  justify-items: start;
+  row-gap: 1vh;
+}
+.botleftright {
+  width: calc(50% - 2.5vw);
+  height: 100%;
+  margin-left: 2.5vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+.botleftright .active {
+  --height: 80%;
+}
+.botleftright > div {
+  width: calc(100% - 3vw);
+  --height: 20%;
+  height: calc(var(--height) - 2.5vh);
+  display: flex;
+  flex-direction: column;
+  padding: 0 1.5vw;
+}
+.botleftright .options {
+  display: none;
+}
+.botleftright .options {
+  display: none !important;
+}
+.botleftright .active .options {
+  display: grid !important;
+}
+.botleft .options {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  width: 100%;
+  justify-items: start;
+  row-gap: 1vh;
+  margin-top: 1vh;
+}
+.botleft .options > input {
+  width: 100%;
+  height: 90%;
+  font-size: 100%;
+  background: none;
+  border: none;
+  outline: 1px solid black;
+}
+.botleft .options > input[type="checkbox"] {
+  outline: none;
+  aspect-ratio: 1/1;
+  height: 85%;
+  width: auto;
+  align-self: center;
+}
+
+.botright {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+.kflist {
+  width: calc(50% - 2.5vw);
+  height: 100%;
+  margin-right: 2.5vw;
+  overflow-y: scroll;
+}
+.kflist .kfentry {
+  width: 100%;
+  height: 20%;
+  display: flex;
+  align-items: center;
+}
+.kflist .kfentry video {
+  height: 60%;
+  aspect-ratio: 1/1;
+  image-rendering: pixelated;
+  margin-left: 10%;
+}
+.kflist .kfentry span {
+  margin-left: 10%;
+  user-select: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.botrightright {
+  width: calc(50% - 2.5vw);
+  height: 100%;
+  margin-left: 2.5vw;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+.kfvelo {
+  aspect-ratio: 16/10;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  margin-bottom: 2.5vw;
+
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+.kfveloleft {
+  width: 50%;
+  height: 80%;
+  display: flex;
+  flex-wrap: wrap;
+}
+.kfveloright {
+  width: 50%;
+  height: 80%;
+  display: flex;
+  flex-wrap: wrap;
+}
+.kfvelobot {
+  width: 100%;
+  height: 20%;
+  display: flex;
+  align-items: end;
+}
+.kfvelobot .kfvelograd {
+  display: inline-block;
+  height: 50%;
+  width: calc(100% / 16);
+  background-color: rgb(var(--r), var(--g), var(--b));
+}
+.kfvelobtn {
+  display: inline-block;
+  width: calc(100% / 8);
+  height: calc(100% / 8);
+  background-color: rgb(var(--r), var(--g), var(--b));
+}
+.kfvelobtn.active {
+  --avg: calc(255 - (var(--r) + var(--g) + var(--b)) / 3);
+  box-shadow: inset 0px 0px 0px 1px rgb(var(--avg), var(--avg), var(--avg));
+}
+.kfbuttons {
+  margin-top: 2.5vh;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  overflow-y: auto;
+}
+.kfbuttons .line {
+  width: 90%;
+  margin-left: 5%;
+  margin-top: 5%;
+
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.kfbuttons .ltypebtn {
+  height: min-content;
+  aspect-ratio: unset;
+  padding: 5px;
+}
+.kfbuttons input {
+  width: 45%;
+  height: 40%;
+  font-size: 100%;
+}
+.kfbuttons input:nth-child(2) {
+  width: 25%;
+}
+.kfbuttons button {
+  height: 125%;
+  aspect-ratio: 1/1;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.kfbuttons button > img {
+  width: 70%;
+  height: 70%;
+}
+.kfbuttons span {
+  user-select: none;
+}
+.kfbuttons input {
+  background: none;
+  border: none;
+  outline: 1px solid black;
+}
+.kfbuttons img {
+  -webkit-user-drag: none;
+}
+
+.lpswitch {
+  position: absolute;
+  width: 2vw;
+  height: auto;
+  aspect-ratio: 1/1;
+  background: linear-gradient(45deg, 0% black, 55% black, 55% var(--bgcol));
+  cursor: pointer;
+}
+.lpswitch::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: black;
+  z-index: -1;
+  clip-path: var(--clip-after);
+}
+.applet.active .lpswitch {
+  display: none;
+}
+.lpswitch.tl {
+  right: 0;
+  bottom: 0;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  --clip-after: polygon(5% 100%, 0 100%, 0 0, 100% 0, 100% 5%);
+}
+.lpswitch.tr {
+  left: 0;
+  bottom: 0;
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  --clip-after: polygon(0 5%, 0 0, 100% 0, 100% 100%, 95% 100%);
+}
+.lpswitch.br {
+  left: 0;
+  top: 0;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  --clip-after: polygon(95% 0, 100% 0, 100% 100%, 0 100%, 0 95%);
+}
+
+#version {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  font-size: 1vh;
+  margin: 1vh 1vw;
+  color: #00000099;
+}
+
+#settingsui {
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #00000099;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+}
+#settingsui .settingswindow {
+  position: relative;
+  width: 75vw;
+  height: 75vh;
+  background-color: lightgray;
+}
+#settingsclose {
+  position: absolute;
+  top: 1vw;
+  right: 1vw;
+  cursor: pointer;
+}

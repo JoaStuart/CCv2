@@ -2,21 +2,20 @@ import math
 from typing import Optional
 import dearpygui.dearpygui as dpg
 import numpy as np
-from launchpad.base import Launchpad
-from ptypes import int2
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
+import pygame
 
-from audio.audio_route import audio_router
-import constants
-from launchpad.route import LaunchpadReceiver
-import logger
-from project.project import ProjButton, Project
-from audio.track import AudioTrack
-from singleton import singleton
-from ui.main_ui import Window
-from ui.props_ui import PropsWindow
-from utils.color import col
-from utils.ui_property import UiProperty
+from ..audio.audio_route import AudioRouter
+from ..launchpad.base import Launchpad
+from .. import constants
+from ..launchpad.route import LaunchpadReceiver
+from .. import logger
+from ..project.project import ProjButton, Project
+from ..audio.track import AudioTrack
+from ..singleton import singleton
+from ..ui.main_ui import Window
+from ..ui.props_ui import PropsWindow
+from ..utils.color import col
+from ..utils.ui_property import UiProperty
 
 
 @singleton
@@ -46,7 +45,7 @@ class TrackWindow(Window, LaunchpadReceiver):
 
         self._pps = self._px_per_sample(700)
         self._spp = 1 / self._pps
-        self._active_channel: Optional[pygame.mixer.Channel] = None
+        self._active_channel: Optional[pygame.mixer.Channel] = None  # type: ignore
 
         Launchpad.PAGE.add_listener(lambda _: self.redraw())
 
@@ -57,20 +56,41 @@ class TrackWindow(Window, LaunchpadReceiver):
     def position(
         self, full_size: tuple[int, int], size: tuple[int, int]
     ) -> tuple[int, int]:
+        """Calculate the position this window should sit at.
+        See super class `Window`
+        """
+
         return full_size[0] // 2 - size[0] // 2, full_size[1] - size[1]
 
     def _track_change(self, _tracks: list[AudioTrack]) -> None:
+        """The callback when the project's tracks change"""
+
         self._waveform_redraw = True
         self.redraw()
 
     def _project(self) -> Project:
+        """
+        Returns:
+            Project: The current project
+        """
+
         return Project.CURRENT_PROJECT.v
 
     def _px_per_sample(self, width: int) -> float:
+        """
+        Args:
+            width (int): The width of the window
+
+        Returns:
+            float: The amount of pixels to use per sample
+        """
+
         samples_in_view = self.SECONDS_PER_SCREEN * constants.SAMPLE_RATE
         return width / samples_in_view
 
     def _pos_change(self, new_pos: float) -> None:
+        """The callback for cursor position changes"""
+
         for t in self._project().timestamps.v:
             if t == new_pos * self._spp / constants.SAMPLE_RATE:
                 PropsWindow().focus_button(t.time, t.pos)
@@ -79,6 +99,8 @@ class TrackWindow(Window, LaunchpadReceiver):
             PropsWindow().unfocus_button()
 
     def _on_click(self) -> None:
+        """The mouse click callback"""
+
         if self._playing():
             return
 
@@ -86,14 +108,20 @@ class TrackWindow(Window, LaunchpadReceiver):
         self.redraw()
 
     def _on_right(self) -> None:
+        """The right arrow callback"""
+
         self._pos_cur.v = min(self._project().max_length(), self._pos_cur.v + 1)
         self.redraw()
 
     def _on_left(self) -> None:
+        """The left arrow callback"""
+
         self._pos_cur.v = max(0, self._pos_cur.v - 1)
         self.redraw()
 
     def _on_next(self) -> None:
+        """The next position callback"""
+
         ts = [t.time * constants.SAMPLE_RATE for t in self._project().timestamps.v]
         possible = [t for t in ts if t > self._pos_cur.v * self._spp]
 
@@ -105,6 +133,8 @@ class TrackWindow(Window, LaunchpadReceiver):
         self.redraw()
 
     def _on_prev(self) -> None:
+        """The previous position callback"""
+
         ts = [t.time * constants.SAMPLE_RATE for t in self._project().timestamps.v]
         possible = [t for t in ts if t < self._pos_cur.v * self._spp]
 
@@ -116,16 +146,20 @@ class TrackWindow(Window, LaunchpadReceiver):
         self.redraw()
 
     def _playing(self) -> bool:
+        """Get if the music is currently playing"""
+
         return self._active_channel is not None and self._active_channel.get_busy()
 
     def _play_pause(self) -> None:
+        """Switch play/pause"""
+
         if self._playing():
             audio_router.stop(self._active_channel)  # type: ignore
             self._active_channel = None
         else:
             project = self._project()
 
-            self._active_channel = audio_router.play(
+            self._active_channel = AudioRouter().play(
                 project.get_segment(
                     math.floor(self._pos_cur.v * self._spp),
                     project.max_length(),
@@ -134,6 +168,12 @@ class TrackWindow(Window, LaunchpadReceiver):
             )
 
     def _update_cur(self, elapsed: float) -> None:
+        """Updates the cursor position
+
+        Args:
+            elapsed (float): The amount of time elapsed from the playback starting
+        """
+
         self._pos_cur.v += constants.SAMPLE_RATE * elapsed * self._pps
 
         dpg.set_x_scroll(self.SCROLL, self._pos_cur.v - 50)
@@ -141,6 +181,8 @@ class TrackWindow(Window, LaunchpadReceiver):
         self.redraw()
 
     def setup(self) -> None:
+        """Setup the window"""
+
         with dpg.child_window(
             width=700, height=300, horizontal_scrollbar=True, tag=self.SCROLL
         ):
@@ -165,10 +207,9 @@ class TrackWindow(Window, LaunchpadReceiver):
 
         self.redraw()
 
-    def _focus(self) -> None:
-        LaunchpadReceiver.request_input(self)
-
     def redraw(self) -> None:
+        """Redraw the track render"""
+
         dpg.delete_item(self.DYNAMIC, children_only=True)
 
         if self._waveform_redraw:
@@ -215,7 +256,7 @@ class TrackWindow(Window, LaunchpadReceiver):
         max_height_tracks = len(self._project().tracks.v) * 25
 
         for t in self._project().timestamps.v:
-            color = (255, 0, 0) if t.page == Launchpad.PAGE.v else (50, 10, 0)
+            color = (200, 200, 200) if t.page == Launchpad.PAGE.v else (50, 50, 50)
 
             dpg.draw_line(
                 (t.time * constants.SAMPLE_RATE * self._px_per_sample(700), top),
@@ -228,16 +269,39 @@ class TrackWindow(Window, LaunchpadReceiver):
                 parent=self.DYNAMIC,
             )
 
+        for l in self._project().lighting.v:
+            dpg.draw_rectangle(
+                (
+                    l.time * constants.SAMPLE_RATE * self._px_per_sample(700),
+                    max_height_tracks + top + 10,
+                ),
+                (
+                    (l.time + l.duration)
+                    * constants.SAMPLE_RATE
+                    * self._px_per_sample(700),
+                    max_height_tracks + top + 50,
+                ),
+                color=col.rep(255).rgb,
+                rounding=5,
+            )
+
         if self._pos_cur.v >= 0:
             dpg.draw_line(
                 (self._pos_cur.v, top),
                 (self._pos_cur.v, max_height_tracks + top - 5),
-                color=(200, 200, 200),
+                color=(255, 20, 0),
                 thickness=2,
                 parent=self.DYNAMIC,
             )
 
     def note_on(self, x: int, y: int) -> None:
+        """The note on listener for any launchpad
+
+        Args:
+            x (int): The X position
+            y (int): The Y position
+        """
+
         cur_sample = self._pos_cur.v * self._spp
         cur_time = cur_sample / constants.SAMPLE_RATE
 
@@ -248,4 +312,11 @@ class TrackWindow(Window, LaunchpadReceiver):
         self._pos_cur.change()
 
     def note_off(self, x: int, y: int) -> None:
-        return
+        """The note off listener for any launchpad
+
+        Args:
+            x (int): The X position
+            y (int): The Y position
+        """
+
+        pass

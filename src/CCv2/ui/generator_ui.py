@@ -1,17 +1,15 @@
-from functools import partial
 import os
-from typing import Callable, Optional
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
+from typing import Callable
+import pygame
 import dearpygui.dearpygui as dpg
 
-import constants
-from launchpad.base import Launchpad
-from launchpad.route import LaunchpadReceiver, LaunchpadRouter
-from lighting.generator import Generator
-from lighting.lightmap import Lightmap
-from ptypes import int2, int3, int4
-from ui.main_ui import Window
-from utils.color import col
+from .. import constants
+from ..launchpad.base import Launchpad
+from ..launchpad.route import LaunchpadReceiver
+from ..lighting.generator import Generator
+from ..lighting.lightmap import Lightmap
+from ..ptypes import int2, int3, int4
+from ..ui.main_ui import Window
 
 
 class GeneratorWindow(Window):
@@ -20,9 +18,6 @@ class GeneratorWindow(Window):
 
     def __init__(self) -> None:
         super().__init__("Generator", "generator")
-
-        gen = Generator()
-        gen.color_receiver.add_listener(lambda s: self._color_switch(s)(False))  # type: ignore
 
     def position(self, full_size: int2, size: int2) -> int2:
         return 0, full_size[1] - size[1]
@@ -43,18 +38,11 @@ class GeneratorWindow(Window):
             self._draw_current_gradient(lm)
 
         self.main.selected_theme()
-        self._draw_color_switch()
         self._draw_light_switch()
 
         self._draw_length()
         dpg.add_spacer(height=20)
         self._draw_controls()
-
-    def _focus(self) -> None:
-        if LaunchpadReceiver.ACTIVE_RECEIVER == Generator():
-            return
-
-        LaunchpadReceiver.request_input(Generator())
 
     def _draw_tiles(self, lm: Lightmap) -> None:
         with dpg.group(horizontal=True, horizontal_spacing=20):
@@ -119,32 +107,6 @@ class GeneratorWindow(Window):
 
         return call
 
-    def _draw_color_switch(self) -> None:
-        with dpg.group(horizontal=True):
-            dpg.add_button(
-                label="Current Color",
-                tag="color_current",
-                enabled=False,
-                callback=self._color_switch("current"),
-            )
-            dpg.add_button(
-                label="Gradient",
-                tag="color_gradient",
-                callback=self._color_switch("gradient"),
-            )
-
-    def _color_switch(self, target: str) -> Callable[[], None]:
-        def call(change: bool = True):
-            dpg.enable_item("color_current")
-            dpg.enable_item("color_gradient")
-
-            dpg.disable_item(f"color_{target}")
-
-            if change:
-                Generator().color_receiver.v = target
-
-        return call
-
     def _draw_light_switch(self) -> None:
         with dpg.group(horizontal=True):
             dpg.add_button(
@@ -179,7 +141,7 @@ class GeneratorWindow(Window):
             dpg.add_separator()
             dpg.add_spacer(height=10)
             dpg.add_input_text(
-                hint="Name.kf",
+                hint="Name",
                 tag="generator_saveas",
                 on_enter=True,
                 callback=self._proceed_save,
@@ -199,7 +161,9 @@ class GeneratorWindow(Window):
         name = dpg.get_value("generator_saveas")
         self._cancel_save()
 
-        Generator().save(os.path.join(constants.CACHE_KEYFRAMES, name))
+        Generator().save(
+            os.path.join(constants.CACHE_KEYFRAMES, name + constants.KEYFRAME_EXT)
+        )
 
         dpg.set_value("generator_length", Generator().length)
 
@@ -210,6 +174,7 @@ class GeneratorWindow(Window):
             dpg.disable_item(f"light_{target}")
 
             Generator().light_type = target
+            Generator().color_receiver.v = target.replace("static", "current")
 
         return call
 
@@ -224,6 +189,7 @@ class GeneratorWindow(Window):
                 min_clamped=True,
                 max_clamped=True,
                 callback=self._set_length,
+                default_value=Generator().length,
             )
 
     def _set_length(self) -> None:

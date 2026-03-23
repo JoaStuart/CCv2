@@ -2,7 +2,7 @@ import abc
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
-    from launchpad.base import LaunchpadIn
+    from ..launchpad.base import LaunchpadIn
 
 
 class LaunchpadRouter:
@@ -10,15 +10,22 @@ class LaunchpadRouter:
         self._lp = lp
 
     def route(self, cmd: int, a0: int, a1: int, _: int) -> None:
-        from launchpad.base import Launchpad
+        from ..launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
         if cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON:
             note = self._lp.midi_to_xy(a0, cmd)
+            note = (
+                note[0] + self._lp.offx,
+                note[1] + self._lp.offy,
+            )
 
             if a1 == 0:
                 self.note_off(*note)
             else:
+                if note[0] == 8 and note[1] >= 0:
+                    Launchpad.PAGE.v = note[1]
+
                 self.note_on(*note, a1)
         elif cnc == Launchpad.NOTE_OFF:
             self.note_off(*self._lp.midi_to_xy(a0, cmd))
@@ -38,13 +45,12 @@ class LaunchpadReceiver(abc.ABC):
         LaunchpadReceiver.ACTIVE_RECEIVER = target
 
     @staticmethod
+    def route_click(x: int, y: int) -> None:
+        LaunchpadReceiver.route_on(x, y)
+        LaunchpadReceiver.route_off(x, y)
+
+    @staticmethod
     def route_on(x: int, y: int) -> None:
-        from launchpad.base import Launchpad
-
-        if x == 8:
-            Launchpad.PAGE.v = y
-            return
-
         if r := LaunchpadReceiver.ACTIVE_RECEIVER:
             r.note_on(x, y)
 

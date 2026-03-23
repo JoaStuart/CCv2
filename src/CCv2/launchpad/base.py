@@ -3,18 +3,24 @@ import re
 import threading
 import time
 from typing import Optional
-import pygame.midi as midi  # type: ignore # Pylance cannot resolve self-compiled pygame
+import pygame.midi as midi
 
-from daemon_thread import DaemonThread
-from launchpad.route import LaunchpadRouter
-from lighting.lightmap import Lightmap
-import logger
-from ptypes import int2
-from utils.color import col
-from utils.ui_property import UiProperty
+from ..utils.daemon_thread import DaemonThread
+from ..launchpad.route import LaunchpadRouter
+from ..lighting.lightmap import Lightmap
+from .. import logger
+from ..ptypes import int2
+from ..utils.color import col
+from ..utils.ui_property import UiProperty
 
 
 midi.init()
+
+
+def register_adapters() -> None:
+    from . import lps
+    from . import mk2
+    from . import mk3pro
 
 
 class Launchpad(abc.ABC):
@@ -48,20 +54,18 @@ class Launchpad(abc.ABC):
 
     @staticmethod
     def get_by_name_in(name: str) -> "Optional[type[LaunchpadIn]]":
-        from launchpad.mk3pro import LaunchpadMk3ProIn
+        register_adapters()
 
-        pad_types = [LaunchpadMk3ProIn]
-        for t in pad_types:
+        for t in LaunchpadIn.__subclasses__():
             if len(re.findall(t.name_re(), name)) > 0:
                 return t
         return None
 
     @staticmethod
     def get_by_name_out(name: str) -> "Optional[type[LaunchpadOut]]":
-        from launchpad.mk3pro import LaunchpadMk3ProOut
+        register_adapters()
 
-        pad_types = [LaunchpadMk3ProOut]
-        for t in pad_types:
+        for t in LaunchpadOut.__subclasses__():
             if len(re.findall(t.name_re(), name)) > 0:
                 return t
         return None
@@ -79,26 +83,30 @@ class Launchpad(abc.ABC):
         logger.debug(
             "Discovered MIDI device '%s' :: %s%s",
             name.decode(),
-            "IN" if inp > 0 else "",
-            "OUT" if outp > 0 else "",
+            "I" if inp > 0 else "-",
+            "O" if outp > 0 else "-",
         )
 
         if inp == 1:
             tpe = Launchpad.get_by_name_in(name.decode())
             if tpe:
-                Launchpad.INPUTS.append(tpe(index))
+                Launchpad.INPUTS.append(tpe(index, name.decode()))
                 logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
 
         if outp == 1:
             tpe = Launchpad.get_by_name_out(name.decode())
             if tpe:
-                Launchpad.OUTPUTS.append(lp := tpe(index))
+                Launchpad.OUTPUTS.append(lp := tpe(index, name.decode()))
                 lp.send_welcome_messages()
                 logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
 
     @staticmethod
     def broadcast_light(cmd: int, pos: int2, color: col) -> None:
         for o in Launchpad.OUTPUTS:
+            pos = (pos[0] - o.offx, pos[1] - o.offy)
+            if not o.check_bounds(pos):
+                continue
+
             o.send_light(cmd, pos, color)
 
     @staticmethod
@@ -109,8 +117,12 @@ class Launchpad(abc.ABC):
                 data.append((i, j))
 
         for o in Launchpad.OUTPUTS:
-            for d in data:
-                o.broadcast_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
+            if (m := o.clear_message()) is not None:
+                o.send(m)
+
+            else:
+                for d in data:
+                    o.send_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
 
     @staticmethod
     def simulate_down(x: int, y: int) -> None:
@@ -121,6 +133,22 @@ class Launchpad(abc.ABC):
     def simulate_up(x: int, y: int) -> None:
         for i in Launchpad.INPUTS:
             i.callback.note_off(x, y)
+
+    @property
+    def offx(self) -> int:
+        return getattr(self, "_offx", 0)
+
+    @offx.setter
+    def offx(self, val: int) -> None:
+        self._offx = val
+
+    @property
+    def offy(self) -> int:
+        return getattr(self, "_offy", 0)
+
+    @offy.setter
+    def offy(self, val: int) -> None:
+        self._offy = val
 
     @abc.abstractmethod
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
@@ -134,8 +162,15 @@ class Launchpad(abc.ABC):
     def lightmap(self) -> str:
         pass
 
+    @abc.abstractmethod
+    def check_bounds(self, pos: int2) -> bool:
+        pass
+
     def _welcome_messages(self) -> list[list[int]]:
         return []
+
+    def clear_message(self) -> Optional[list[int]]:
+        return None
 
 
 class LaunchpadChecker(DaemonThread):
@@ -154,12 +189,18 @@ class LaunchpadChecker(DaemonThread):
             self._last_count = new_count
 
 
-class LaunchpadIn(Launchpad, DaemonThread):
-    def __init__(self, index: int) -> None:
+class LaunchpadIn(DaemonThread, Launchpad):
+
+    def __init__(self, index: int, midiname: str) -> None:
+        self._midiname = midiname
         self._in = midi.Input(index)
         self._callback: LaunchpadRouter = LaunchpadRouter(self)
 
         super().__init__("MidiReader-%d" % index)
+
+    @property
+    def midiname(self) -> str:
+        return self._midiname
 
     @property
     def callback(self) -> LaunchpadRouter:
@@ -173,6 +214,10 @@ class LaunchpadIn(Launchpad, DaemonThread):
         Launchpad.UNPAUSE_READ.wait()
 
         try:
+            if not self._in.poll():
+                time.sleep(0.01)
+                return
+
             messages = self._in.read(1)
             if len(messages) == 0:
                 return
@@ -187,15 +232,32 @@ class LaunchpadIn(Launchpad, DaemonThread):
 
 
 class LaunchpadOut(Launchpad):
-    def __init__(self, index: int) -> None:
+
+    def __init__(self, index: int, midiname: str) -> None:
+        self._midiname = midiname
         self._out = midi.Output(index)
         self._lightmap = Lightmap.MAPS[self.lightmap()]
 
+    @property
+    def midiname(self) -> str:
+        return self._midiname
+
     def send(self, data: list[int]) -> None:
-        if len(data) > 4:
-            self._out.write_sys_ex(0, data)
-        else:
-            self._out.write([[data, 0]])
+        try:
+            if len(data) > 4:
+                self._out.write_sys_ex(0, data)
+            else:
+                self._out.write([[data, 0]])
+        except Exception as e:
+            logger.warning(
+                "Failed to send light to %s because of %s. Detaching launchpad...",
+                self._midiname,
+                e.args[0],
+            )
+
+            i = Launchpad.OUTPUTS.index(self)
+            Launchpad.OUTPUTS.pop(i)
+            Launchpad.INPUTS.pop(i)
 
     def send_welcome_messages(self) -> None:
         for m in self._welcome_messages():
@@ -203,4 +265,4 @@ class LaunchpadOut(Launchpad):
 
     def send_light(self, cmd: int, pos: int2, color: col) -> None:
         note, cmd = self.xy_to_midi(pos, cmd)
-        self.send([cmd, note, self._lightmap.vel(color)])
+        self.send([cmd, note, self._lightmap.closest(color)])

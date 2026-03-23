@@ -5,6 +5,12 @@ _LOG = logging.getLogger()
 
 
 def init(verbose: bool) -> None:
+    """Initialize the logger
+
+    Args:
+        verbose (bool): Whether or not to output debug logging
+    """
+
     global print
 
     lvl = logging.DEBUG if verbose else logging.INFO
@@ -20,6 +26,10 @@ def init(verbose: bool) -> None:
     _LOG.addHandler(console_handler)
 
     print = _LOG.info
+
+    import jpyweb
+
+    logging.getLogger("jPyWeb").setLevel(logging.DEBUG if verbose else logging.INFO)
 
 
 debug = _LOG.debug

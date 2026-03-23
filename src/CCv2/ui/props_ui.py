@@ -1,8 +1,8 @@
 import dearpygui.dearpygui as dpg
 
-from ptypes import int2
-from singleton import singleton
-from ui.main_ui import Window
+from ..ptypes import int2
+from ..singleton import singleton
+from ..ui.main_ui import Window
 
 
 @singleton
@@ -14,9 +14,15 @@ class PropsWindow(Window):
         super().__init__("Properties", "props")
 
     def position(self, full_size: int2, size: int2) -> int2:
+        """Calculate the position this window should sit at.
+        See super class `Window`
+        """
+
         return full_size[0] - size[0], full_size[1] - size[1]
 
     def setup(self) -> None:
+        """Setup the window"""
+
         self.main.disabled_theme()
 
         self._draw_button()
@@ -28,6 +34,8 @@ class PropsWindow(Window):
         self._disable_light()
 
     def _draw_button(self) -> None:
+        """Draw informations about the currently selected button"""
+
         with dpg.group(horizontal=True):
             dpg.add_text("Button time (s):")
             dpg.add_input_float(
@@ -56,6 +64,8 @@ class PropsWindow(Window):
             )
 
     def _draw_light(self) -> None:
+        """Draw information about the currently selected light"""
+
         with dpg.group(horizontal=True):
             dpg.add_text("Light name:")
             dpg.add_input_text(
@@ -89,23 +99,38 @@ class PropsWindow(Window):
             )
 
     def _enable_btn(self) -> None:
+        """Enable the button properties"""
+
         for k in self.BUTTON_PROPS:
             dpg.enable_item(k)
 
     def _disable_light(self) -> None:
+        """Disable the light properties"""
+
         for k in self.LIGHT_PROPS:
             dpg.disable_item(k)
 
     def _enable_light(self) -> None:
+        """Enable the light properties"""
+
         for k in self.LIGHT_PROPS:
             dpg.enable_item(k)
 
     def focus_button(self, t: float, pos: int2) -> None:
+        """Focus on the given button
+
+        Args:
+            t (float): The timestamp of the button
+            pos (int2): The position of the button
+        """
+
         self._enable_btn()
         dpg.set_value("button_time", t)
         dpg.set_value("button_pos", pos)
 
     def unfocus_button(self) -> None:
+        """Unfocus any focused button"""
+
         dpg.set_value("button_time", 0)
         dpg.set_value("button_pos", (0, 0))
 

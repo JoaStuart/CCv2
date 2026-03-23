@@ -1,9 +1,7 @@
-**/.venv
-_*
+pygame/**
+old/**
+.venv/**
+src/*.egg-info/**
+**/__pycache__/**
 cache/**
-ideas.txt
-
-**/__pycache__
-
-# Ignore custom pygame build
-_pygame
+*.lpz

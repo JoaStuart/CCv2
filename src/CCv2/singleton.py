@@ -1,10 +1,10 @@
-from typing import Callable, TypeVar
+from typing import Callable, TypeVar, cast
 
 
 _T = TypeVar("_T")
 
 
-def singleton(cls: type[_T]) -> Callable[..., _T]:
+def singleton(cls: type[_T]) -> type[_T]:
     """A singleton decorator for classes
 
     Args:
@@ -18,9 +18,9 @@ def singleton(cls: type[_T]) -> Callable[..., _T]:
     instances: dict[type, _T] = {}
 
     # The function that will be called to get the instance
-    def get_instance(*args, **kwargs) -> _T:  # type: ignore
+    def get_instance(*args, **kwargs) -> _T:
         if cls not in instances:
             instances[cls] = cls(*args, **kwargs)
         return instances[cls]
 
-    return get_instance  # type: ignore
+    return cast(type[_T], get_instance)

@@ -1,0 +1,3 @@
+[submodule "web/feathericons"]
+	path = web/feathericons
+	url = https://github.com/feathericons/feather.git

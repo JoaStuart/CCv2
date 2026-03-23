@@ -1,20 +1,20 @@
-import abc
 import json
 import os
-import struct
-import threading
-import time
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 import zipfile
 import numpy as np
 
-import constants
-from audio.track import AudioTrack
-import logger
-from project.baking import BakedProject
-from ptypes import AudioRaw, int2
-from utils.json_wrapper import Json
-from utils.ui_property import UiProperty
+from .. import constants
+from ..audio.track import AudioTrack
+from .. import logger
+from ..project.baking import BakedProject
+from ..ptypes import AudioRaw, int2
+from ..utils.json_wrapper import Json
+from ..utils.ui_property import UiProperty
+from ..lighting.keyframes import Keyframes
+
+if TYPE_CHECKING:
+    from .loader import ProjectLoader
 
 
 class ProjButton:
@@ -24,12 +24,25 @@ class ProjButton:
         self.page = page
 
 
+class ProjLight:
+
+    def __init__(
+        self, light: str, time: float, duration: Optional[float], offset: int2 = (0, 0)
+    ) -> None:
+        self.light = light
+        self.time = time
+        self.duration = (
+            duration if duration is not None else Keyframes.FRAME_CACHE[light].anim_time
+        )
+        self.offset = offset
+
+
 class Project:
     CURRENT_PROJECT: "UiProperty[Project]"
 
     @staticmethod
     def load(path: str) -> None:
-        from launchpad.base import Launchpad
+        from ..launchpad.base import Launchpad
 
         try:
             Launchpad.pause_read()
@@ -48,6 +61,7 @@ class Project:
                     p.load_path = path
 
                     Project.CURRENT_PROJECT.v = p
+                    Keyframes.load()
                     return
 
             raise RuntimeError("The provided file is not a valid CCv2 cover file!")
@@ -56,7 +70,7 @@ class Project:
 
     @staticmethod
     def save(path: str) -> None:
-        from launchpad.base import Launchpad
+        from ..launchpad.base import Launchpad
 
         Launchpad.pause_read()
 
@@ -87,6 +101,18 @@ class Project:
                 Project._save_dir(zfile, af, arcname + f + "/")
 
     @staticmethod
+    def clear() -> None:
+        os.makedirs(constants.CACHE, exist_ok=True)
+        Project._clear()
+
+        for d in [
+            constants.CACHE_AUDIO,
+            constants.CACHE_KEYFRAMES,
+            constants.CACHE_PAGES,
+        ]:
+            os.makedirs(d, exist_ok=True)
+
+    @staticmethod
     def _clear(root: str = constants.CACHE) -> None:
         for f in os.listdir(root):
             af = os.path.join(root, f)
@@ -99,18 +125,28 @@ class Project:
 
     @staticmethod
     def versions() -> "list[ProjectLoader]":
+        from .loader import ProjectV1
+
         return [ProjectV1()]
 
     @staticmethod
     def load_audio(path: str) -> list[AudioTrack]:
         return [AudioTrack(os.path.join(path, k)) for k in os.listdir(path)]
 
+    @staticmethod
+    def _dispatch_bake(*args) -> None:
+        Project.CURRENT_PROJECT.v.bake()
+
     def __init__(self) -> None:
         self.tracks: UiProperty[list[AudioTrack]] = UiProperty([])
 
         self.timestamps: UiProperty[list[ProjButton]] = UiProperty([])
         self.timestamps.add_listener(lambda a: a.sort(key=lambda t: t.time))
-        self.timestamps.add_listener(lambda _: Project.CURRENT_PROJECT.v.bake())
+        self.timestamps.add_listener(Project._dispatch_bake)
+
+        self.lighting: UiProperty[list[ProjLight]] = UiProperty([])
+        self.lighting.add_listener(lambda a: a.sort(key=lambda t: t.time))
+        self.lighting.add_listener(Project._dispatch_bake)
 
         self.title: str = ""
         self.load_path: Optional[str] = None
@@ -134,7 +170,23 @@ class Project:
 
         info = np.iinfo(constants.SAMPLE_DEPTH)
 
-        return np.clip(out, info.min, info.max).astype(constants.SAMPLE_DEPTH)
+        return self.apply_audio_fade(np.clip(out, info.min, info.max))
+
+    def apply_audio_fade(
+        self, audio: np.ndarray, fade_in_ms: float = 10, fade_out_ms: float = 10
+    ) -> AudioRaw:
+        fade_in_samples: int = int(constants.SAMPLE_RATE * fade_in_ms / 1000)
+        fade_out_samples: int = int(constants.SAMPLE_RATE * fade_out_ms / 1000)
+
+        fade_in = np.linspace(0.0, 1.0, fade_in_samples)[:, None]
+        fade_out = np.linspace(1.0, 0.0, fade_out_samples)[:, None]
+
+        result = audio.copy()
+
+        result[:fade_in_samples, :] *= fade_in
+        result[-fade_out_samples:, :] *= fade_out
+
+        return result.astype(constants.SAMPLE_DEPTH)
 
     def max_length(self) -> int:
         if len(self.tracks.v) == 0:
@@ -146,110 +198,15 @@ class Project:
 Project.CURRENT_PROJECT = UiProperty(Project())
 
 
-class ProjectLoader(abc.ABC):
-    @abc.abstractmethod
-    def load(self) -> Project:
-        pass
+class ProjDescription(Json):
+    @staticmethod
+    def loads(data: str | bytes | bytearray) -> "ProjDescription":
+        return ProjDescription(json.loads(data))
 
-    @abc.abstractmethod
-    def check(self) -> bool:
-        pass
+    def __init__(self, obj: Any) -> None:
+        super().__init__(obj)
 
-    @abc.abstractmethod
-    def dump(self, proj: Project) -> None:
-        pass
+        self.title: str = self.get_item("title", str)
 
-
-class ProjectV1(ProjectLoader):
-    def load(self) -> Project:
-        tracks = Project.load_audio(constants.CACHE_AUDIO)
-        proj_descr = self._load_project_descr()
-
-        btns: list[ProjButton] = []
-
-        for p in range(8):
-            f = os.path.join(constants.CACHE_BUTTONS, f"{p}.lpb")
-            if os.path.isfile(f):
-                with open(f, "rb") as file:
-                    data = file.read()
-
-                btns.extend(self._load_buttons(data, p))
-
-        p = Project()
-        p.tracks.v = tracks
-        p.title = proj_descr.get_item("title", str)
-        p.timestamps.v = btns
-        return p
-
-    def _pdesc(self) -> str:
-        return os.path.join(constants.CACHE, "project" + constants.PDESC_EXT)
-
-    def _load_project_descr(self) -> Json:
-        try:
-            with open(self._pdesc(), "r") as file:
-                data = file.read()
-        except Exception:
-            raise RuntimeError("Could not load project description file!")
-
-        return Json.loads(data)
-
-    def check(self) -> bool:
-        return (
-            self._load_project_descr()
-            .get_item("$schema", str)
-            .endswith("project_v1.json")
-        )
-
-    def _create_paths(self) -> None:
-        for p in [
-            constants.CACHE_AUDIO,
-            constants.CACHE_KEYFRAMES,
-            constants.CACHE_BUTTONS,
-        ]:
-            os.makedirs(p, exist_ok=True)
-
-    def dump(self, proj: Project) -> None:
-        data = {
-            "$schema": constants.SCHEMA_PROJECT_V1,
-            "title": proj.title,
-        }
-
-        with open(self._pdesc(), "w") as file:
-            file.write(json.dumps(data))
-
-        for p in range(8):
-            data = self._dump_buttons(proj, p)
-
-            if len(data) == 0:
-                continue
-
-            with open(os.path.join(constants.CACHE_BUTTONS, f"{p}.lpb"), "wb") as file:
-                file.write(data)
-
-    def _pack_key(self, x: int, y: int) -> int:
-        return ((x + 1) << 4) | (y + 1)
-
-    def _unpack_key(self, key: int) -> tuple[int, int]:
-        return (key >> 4) - 1, (key & 0xF) - 1
-
-    def _dump_buttons(self, proj: Project, page) -> bytes:
-        buff: list[bytes] = []
-
-        ts = [t for t in proj.timestamps.v if t.page == page]
-
-        for t in ts:
-            buff.append(struct.pack("fB", (t.time, self._pack_key(*t.pos))))
-
-        return b"".join(buff)
-
-    def _load_buttons(self, data: bytes, page: int) -> list[ProjButton]:
-        btns: list[ProjButton] = []
-
-        for i in range(0, len(data), 5):
-            time, pos = struct.unpack("fB", data[i : i + 5])
-
-            pos = self._unpack_key(pos)
-
-            btns.append(ProjButton(time, pos, page))
-
-        return btns
+        pages = self.get("pages")
+        self.pages_buttons: list[int] = pages.get_item("buttons", list)

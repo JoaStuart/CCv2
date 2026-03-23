@@ -5,15 +5,15 @@ import threading
 from typing import Optional
 import dearpygui.dearpygui as dpg
 
-import constants
-from launchpad.base import Launchpad
-from launchpad.route import LaunchpadReceiver
-from lighting.keyframes import Keyframes, PersistentKeyframes
-from lighting.lightmanager import LightManager
-from ptypes import int2
-from singleton import singleton
-from utils.ui_property import UiProperty
-from utils.color import col
+from .. import constants
+from ..launchpad.base import Launchpad
+from ..launchpad.route import LaunchpadReceiver
+from ..lighting.keyframes import Keyframes, PersistentKeyframes
+from ..lighting.lightmanager import KfData, LightManager
+from ..ptypes import int2
+from ..singleton import singleton
+from ..utils.ui_property import UiProperty
+from ..utils.color import col
 
 
 @singleton
@@ -117,7 +117,7 @@ class Generator(LaunchpadReceiver):
     def _display(self, pos: int2, color: col, off: threading.Event) -> None:
         kf = PersistentKeyframes(off)
         kf.append({pos: color})
-        LightManager().play_raw(kf)
+        LightManager().play_raw(KfData(kf))
 
     def note_off(self, x: int, y: int) -> None:
         return super().note_off(x, y)
@@ -150,7 +150,7 @@ class Generator(LaunchpadReceiver):
             for k, v in self._active_keys.items():
                 v.off_evt.set()
 
-            end = LightManager().play_raw(self._keyframe)
+            end = LightManager().play_raw(KfData(self._keyframe))
             end.wait()
 
             self.display_all()

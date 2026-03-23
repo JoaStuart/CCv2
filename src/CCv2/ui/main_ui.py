@@ -1,15 +1,17 @@
 import abc
 import os
 import threading
-import logger
-import pygame  # type: ignore # Pylance cannot resolve self-compiled pygame
+from typing import Callable
+import pygame
 import dearpygui.dearpygui as dpg
 
-import constants
-from lighting.lightmanager import LightManager, LightReceiver
-from ptypes import int2, int4
-from singleton import singleton
-from utils.color import col
+from ..launchpad.route import LaunchpadReceiver
+from .. import logger
+from .. import constants
+from ..lighting.lightmanager import LightManager, LightReceiver
+from ..ptypes import int2, int4
+from ..singleton import singleton
+from ..utils.color import col
 
 
 @singleton
@@ -122,13 +124,12 @@ class LaunchpadWindow(Window, LightReceiver):
     SPACE = 3
     PADD = 5
 
-    CENTER_COL = col.hex(0xCCCCCC)
+    CENTER_COL = col.hex(0x888888)
     CTRLLR_COL = col.hex(0x303030)
     WHITE = col.hex(0xFFFFFF)
 
     def __init__(self) -> None:
         super().__init__("Launchpad", "launchpad")
-
         LightManager().add_light_receiver(self)
 
     def _button_size(self, x: int, y: int) -> int2:
@@ -198,19 +199,36 @@ class LaunchpadWindow(Window, LightReceiver):
             pos=(cx, cy + 17),
             label=f"{x - 1}:{y - 1}",
             tag=f"{x - 1}:{y - 1}",
+            callback=self._make_btn_callback(x - 1, y - 1),
         )
 
+    def _make_btn_callback(self, x: int, y: int) -> Callable[[], None]:
+        def call():
+            LaunchpadReceiver.route_on(x, y)
+
+        return call
+
     def __setitem__(self, pos: int2, c: col) -> None:
-        x, y = pos
-        dpg.configure_item(f"{x}:{y}", default_value=c.rgb)
+        from ..ui.proj_ui import ProjectWindow
+
+        if ProjectWindow.VISUALIZE:
+            x, y = pos
+            center = self._button_center(x, y)
+            default = self.CENTER_COL if center else self.CTRLLR_COL
+            color = default if c == col(0, 0, 0) else c.gamma(2)
+
+            dpg.configure_item(f"{x}:{y}", default_value=color.rgb)
+
+    def finish(self) -> None:
+        return super().finish()
 
 
-def open_and_run(splash_finish: threading.Event) -> None:
-    from ui.generator_ui import GeneratorWindow
-    from ui.track_ui import TrackWindow
-    from ui.props_ui import PropsWindow
-    from ui.proj_ui import ProjectWindow
-    from ui.pool_ui import PoolWindow
+def open_and_run(splash_finish: threading.Event, _args) -> None:
+    from ..ui.generator_ui import GeneratorWindow
+    from ..ui.track_ui import TrackWindow
+    from ..ui.props_ui import PropsWindow
+    from ..ui.proj_ui import ProjectWindow
+    from ..ui.pool_ui import PoolWindow
 
     man = WindowManager()
     man.open(
