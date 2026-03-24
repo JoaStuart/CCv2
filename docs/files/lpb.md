@@ -8,8 +8,12 @@ This file format holds timestamps for all buttons on a page and their respective
 
 ```text
 {
-    TIMESTAMP       [ float32 timestamp for the following button to start at ]
+    MAGIC_HEADER        [ [0x12 0x11] stored as raw data - used to identify this file ]
+    {
+        TIMESTAMP       [ float32 timestamp for the following button to start at ]
 
-    POSITION        [ uint8 packed position of the button ]
-} [ repeated for all buttons on the current page ]
+        POSITION X        [ int8 x position of the button ]
+        POSITION Y        [ int8 y position of the button ]
+    } [ repeated for all buttons on the current page ]
+}
 ```

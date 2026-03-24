@@ -1,18 +1,17 @@
-import abc
 from io import BytesIO
 import io
 import os
 import struct
 import threading
 import time
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 import av
 from av import VideoStream
 import numpy as np
 
+from ..utils.versioning import VersionException, VersionLoader
 from ..utils.data_uri import make_data_uri
-
 from ..utils.daemon_thread import DaemonThread
 from .. import constants
 from .. import logger
@@ -68,10 +67,6 @@ class Keyframes:
     ]
 
     @staticmethod
-    def versions() -> "list[KeyframesLoader]":
-        return [KeyframesV1(), KeyframesV1_1()]
-
-    @staticmethod
     def preview_request(name: str, frame: "Keyframes") -> None:
         amnt, thread = len(Keyframes.PREVIEW_THREADS[0]), Keyframes.PREVIEW_THREADS[0]
 
@@ -93,11 +88,11 @@ class Keyframes:
             with open(os.path.join(constants.INTERNAL_KEYFRAMES, k), "rb") as rf:
                 data = rf.read()
 
-            for v in Keyframes.versions():
-                if v.check(data):
-                    Keyframes.FRAME_CACHE[f"__{name}"] = v.load(data)
-                    break
-            else:
+            try:
+                Keyframes.FRAME_CACHE[f"__{name}"] = VersionLoader.load_best(
+                    Keyframes, data
+                )
+            except VersionException:
                 logger.warning("Could not load %s as keyframes!", k)
 
     @staticmethod
@@ -112,12 +107,12 @@ class Keyframes:
             with open(os.path.join(constants.CACHE_KEYFRAMES, k), "rb") as rf:
                 data = rf.read()
 
-            for v in Keyframes.versions():
-                if v.check(data):
-                    Keyframes.FRAME_CACHE[name] = frame = v.load(data)
-                    Keyframes.preview_request(name, frame)
-                    break
-            else:
+            try:
+                Keyframes.FRAME_CACHE[name] = frame = VersionLoader.load_best(
+                    Keyframes, data
+                )
+                Keyframes.preview_request(name, frame)
+            except VersionException:
                 logger.warning("Could not load %s as keyframes!", k)
 
         if Keyframes.LOAD_COMPLETED is not None:
@@ -129,11 +124,10 @@ class Keyframes:
             if name.startswith("__"):
                 continue
 
-            ver = Keyframes.versions()[-1]
             with open(
                 os.path.join(constants.CACHE_KEYFRAMES, f"{name}.lpk"), "wb"
             ) as wf:
-                wf.write(ver.dump(kf))
+                wf.write(VersionLoader.dump_best(Keyframes, kf))
 
     def __init__(self) -> None:
         self._keyframes: list[Kf] = []
@@ -287,21 +281,13 @@ class PersistentKeyframes(Keyframes):
         return new
 
 
-class KeyframesLoader(abc.ABC):
-    @abc.abstractmethod
-    def check(self, data: bytes) -> bool:
-        pass
+class KeyframesV1(VersionLoader[Keyframes]):
+    def result(self) -> type[Keyframes]:
+        return Keyframes
 
-    @abc.abstractmethod
-    def load(self, data: bytes) -> Keyframes:
-        pass
+    def version(self) -> float:
+        return 1.0
 
-    @abc.abstractmethod
-    def dump(self, keyframes: Keyframes) -> bytes:
-        pass
-
-
-class KeyframesV1(KeyframesLoader):
     def check(self, data: bytes) -> bool:
         return data[0] == 0xCC and data[1] == 0x01
 
@@ -311,7 +297,7 @@ class KeyframesV1(KeyframesLoader):
     def _unpack_key(self, key: int) -> tuple[int, int]:
         return (key >> 4) - 1, (key & 0xF) - 1
 
-    def load(self, data: bytes) -> Keyframes:
+    def load(self, data: bytes, *args: Any) -> Keyframes:
         f = BytesIO(data)
         f.read(2)  # Skip header because it was checked using `check`
         keyframes = Keyframes()
@@ -333,7 +319,7 @@ class KeyframesV1(KeyframesLoader):
 
         return keyframes
 
-    def dump(self, keyframes: Keyframes) -> bytes:
+    def dump(self, keyframes: Keyframes, *args: Any) -> bytes:
         data: list[bytes] = [b"\xcc\x01"]
 
         static = -1 if keyframes.static_after else 1
@@ -349,11 +335,17 @@ class KeyframesV1(KeyframesLoader):
         return b"".join(data)
 
 
-class KeyframesV1_1(KeyframesLoader):
+class KeyframesV1_1(VersionLoader[Keyframes]):
+    def result(self) -> type[Keyframes]:
+        return Keyframes
+
+    def version(self) -> float:
+        return 1.1
+
     def check(self, data: bytes) -> bool:
         return data[0] == 0xCC and data[1] == 0x11
 
-    def load(self, data: bytes) -> Keyframes:
+    def load(self, data: bytes, *args: Any) -> Keyframes:
         f = BytesIO(data)
         f.read(2)  # Skip header because it was checked using `check`
         keyframes = Keyframes()
@@ -372,7 +364,7 @@ class KeyframesV1_1(KeyframesLoader):
 
         return keyframes
 
-    def dump(self, keyframes: Keyframes) -> bytes:
+    def dump(self, keyframes: Keyframes, *args: Any) -> bytes:
         data: list[bytes] = [b"\xcc\x11"]
 
         static = -1 if keyframes.static_after else 1

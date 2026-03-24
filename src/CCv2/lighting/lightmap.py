@@ -1,7 +1,7 @@
-import abc
 import os
-from typing import ItemsView
+from typing import Any, ItemsView
 
+from ..utils.versioning import VersionException, VersionLoader
 from .. import constants
 from .. import logger
 from ..utils.color import col
@@ -9,10 +9,6 @@ from ..utils.color import col
 
 class Lightmap:
     MAPS: "dict[str, Lightmap]" = {}
-
-    @staticmethod
-    def versions() -> "list[LightmapLoader]":
-        return [LightmapV1()]
 
     @staticmethod
     def load_all() -> None:
@@ -26,18 +22,15 @@ class Lightmap:
             with open(map_path, "rb") as rf:
                 data = rf.read()
 
-            lightmap = Lightmap(os.path.splitext(m)[0])
+            name = os.path.splitext(m)[0]
 
-            for v in Lightmap.versions():
-                if v.check(data):
-                    v.load(lightmap, data)
-                    logger.debug("Loaded %s as %s", m, v.__class__.__name__)
-                    break
-            else:
+            try:
+                lightmap = VersionLoader.load_best(Lightmap, data, name)
+                logger.debug("Loaded lightmap %s", m)
+                Lightmap.MAPS[lightmap.name] = lightmap
+
+            except VersionException:
                 logger.warning("Could not load %s as a Lightmap!", m)
-                continue
-
-            Lightmap.MAPS[lightmap.name] = lightmap
 
     def __init__(self, name: str) -> None:
         self._mappings: dict[int, col] = {}
@@ -91,33 +84,29 @@ class Lightmap:
         return str(self._mappings)
 
 
-class LightmapLoader(abc.ABC):
-    @abc.abstractmethod
-    def check(self, data: bytes) -> bool:
-        pass
+class LightmapV1(VersionLoader[Lightmap]):
+    def result(self) -> type[Lightmap]:
+        return Lightmap
 
-    @abc.abstractmethod
-    def load(self, lightmap: Lightmap, data: bytes) -> None:
-        pass
+    def version(self) -> float:
+        return 1.0
 
-    @abc.abstractmethod
-    def dump(self, lightmap: Lightmap) -> bytes:
-        pass
-
-
-class LightmapV1(LightmapLoader):
     def check(self, data: bytes) -> bool:
         return data[0] == 0x55 and data[1] == 0x1
 
-    def load(self, lightmap: Lightmap, data: bytes) -> None:
+    def load(self, data: bytes, name: str, *args: Any) -> Lightmap:
+        lm = Lightmap(name)
+
         for i in range(2, len(data), 4):
-            lightmap[data[i]] = col(
+            lm[data[i]] = col(
                 data[i + 1],
                 data[i + 2],
                 data[i + 3],
             )
 
-    def dump(self, lightmap: Lightmap) -> bytes:
+        return lm
+
+    def dump(self, lightmap: Lightmap, *args: Any) -> bytes:
         data = bytearray(len(lightmap) * 4 + 2)
         data[0] = 0x55
         data[1] = 0x01

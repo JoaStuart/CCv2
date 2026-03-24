@@ -1,38 +1,32 @@
 import abc
+import io
 import json
+import math
 import os
 import struct
 from typing import Any
 
+from ..utils.versioning import VersionLoader
 from ..lighting.keyframes import Keyframes
-
 from .. import constants
 from .. import logger
 from ..project.project import ProjButton, ProjDescription, ProjLight, Project
 
 
-class ProjectLoader(abc.ABC):
-    @abc.abstractmethod
-    def load(self) -> Project:
-        pass
+class ProjectV1(VersionLoader[Project]):
+    def result(self) -> type[Project]:
+        return Project
 
-    @abc.abstractmethod
-    def check(self) -> bool:
-        pass
+    def version(self) -> float:
+        return 1.0
 
-    @abc.abstractmethod
-    def dump(self, proj: Project) -> None:
-        pass
-
-
-class ProjectV1(ProjectLoader):
-    def load(self) -> Project:
+    def load(self, data: bytes, *args: Any) -> Project:
         tracks = Project.load_audio(constants.CACHE_AUDIO)
         proj_descr = self._load_project_descr()
 
         btns = self._read_buttons(proj_descr.get("pages").get_item("buttons", list))
         with open(os.path.join(constants.CACHE_PAGES, "lights.lpl"), "rb") as file:
-            lights = self._load_lights(file.read())
+            lights = VersionLoader.load_best(list[ProjLight], file.read())
 
         p = Project()
         p.tracks.v = tracks
@@ -52,7 +46,7 @@ class ProjectV1(ProjectLoader):
                 with open(f, "rb") as file:
                     data = file.read()
 
-                btns.extend(a := self._load_buttons(data, p))
+                btns.extend(VersionLoader.load_best(list[ProjButton], data, p))
 
         return btns
 
@@ -68,7 +62,7 @@ class ProjectV1(ProjectLoader):
 
         return ProjDescription.loads(data)
 
-    def check(self) -> bool:
+    def check(self, data: bytes) -> bool:
         return (
             self._load_project_descr()
             .get_item("$schema", str)
@@ -83,7 +77,7 @@ class ProjectV1(ProjectLoader):
         ]:
             os.makedirs(p, exist_ok=True)
 
-    def dump(self, proj: Project) -> None:
+    def dump(self, proj: Project) -> bytes:
         proj_data = {
             "$schema": constants.SCHEMA_PROJECT_V1,
             "title": proj.title,
@@ -102,11 +96,14 @@ class ProjectV1(ProjectLoader):
         with open(self._pdesc(), "w") as file:
             file.write(json.dumps(proj_data))
 
-    def _dump_page_btn(self, proj: Project, proj_data: dict[str, Any], p: int) -> None:
-        data = self._dump_buttons(proj, p)
+        return b""
 
-        if len(data) == 0:
+    def _dump_page_btn(self, proj: Project, proj_data: dict[str, Any], p: int) -> None:
+        buttons = [t for t in proj.timestamps.v if t.page == p]
+        if len(buttons) == 0:
             return
+
+        data = VersionLoader.dump_best(list[ProjButton], buttons)
 
         proj_data["pages"]["buttons"].append(p)
 
@@ -114,10 +111,21 @@ class ProjectV1(ProjectLoader):
             file.write(data)
 
     def _dump_full_light(self, proj: Project) -> None:
-        data = self._dump_lights(proj)
+        data = VersionLoader.dump_best(list[ProjLight], proj.lighting.v)
 
         with open(os.path.join(constants.CACHE_PAGES, "lights.lpl"), "wb") as file:
             file.write(data)
+
+
+class LaunchpadButtonsV1(VersionLoader[list[ProjButton]]):
+    def result(self):
+        return list[ProjButton]
+
+    def version(self) -> float:
+        return math.nan
+
+    def check(self, data: bytes) -> bool:
+        return True  # V1 does not have a magic header, just check last
 
     def _pack_key(self, x: int, y: int) -> int:
         return ((x + 1) << 4) | (y + 1)
@@ -125,29 +133,7 @@ class ProjectV1(ProjectLoader):
     def _unpack_key(self, key: int) -> tuple[int, int]:
         return (key >> 4) - 1, (key & 0xF) - 1
 
-    def _dump_buttons(self, proj: Project, page: int) -> bytes:
-        buff: list[bytes] = []
-
-        ts = [t for t in proj.timestamps.v if t.page == page]
-
-        for t in ts:
-            buff.append(struct.pack("fB", t.time, self._pack_key(*t.pos)))
-
-        return b"".join(buff)
-
-    def _dump_lights(self, proj: Project) -> bytes:
-        buff: list[bytes] = []
-
-        for l in proj.lighting.v:
-            buff.append(
-                struct.pack("ffbbI", l.time, l.duration, *(l.offset), len(l.light))
-            )
-
-            buff.append(l.light.encode())
-
-        return b"".join(buff)
-
-    def _load_buttons(self, data: bytes, page: int) -> list[ProjButton]:
+    def load(self, data: bytes, page: int, *args: Any) -> list[ProjButton]:
         btns: list[ProjButton] = []
 
         for i in range(0, len(data), 5):
@@ -159,19 +145,84 @@ class ProjectV1(ProjectLoader):
 
         return btns
 
-    def _load_lights(self, data: bytes) -> list[ProjLight]:
+    def dump(self, buttons: list[ProjButton], *args: Any) -> bytes:
+        buff: list[bytes] = []
+
+        for t in buttons:
+            buff.append(struct.pack("fB", t.time, self._pack_key(*t.pos)))
+
+        return b"".join(buff)
+
+
+class LaunchpadButtonsV1_1(VersionLoader[list[ProjButton]]):
+    def result(self):
+        return list[ProjButton]
+
+    def version(self) -> float:
+        return 1.1
+
+    def check(self, data: bytes) -> bool:
+        return data[0] == 0x12 and data[1] == 0x11
+
+    def load(self, data: bytes, page: int, *args: Any) -> list[ProjButton]:
+        btns: list[ProjButton] = []
+        reader = io.BytesIO(data)
+        reader.read(2)
+
+        while True:
+            d = reader.read(6)
+            if len(d) == 0:
+                break
+
+            time, posx, posy = struct.unpack("fbb", d)
+
+            btns.append(ProjButton(round(time, 2), (posx, posy), page))
+
+        return btns
+
+    def dump(self, buttons: list[ProjButton], *args: Any) -> bytes:
+        buff: list[bytes] = [b"\x12\x11"]
+
+        for t in buttons:
+            buff.append(struct.pack("fbb", t.time, *t.pos))
+
+        return b"".join(buff)
+
+
+class LaunchpadLightsV1(VersionLoader[list[ProjLight]]):
+    def result(self):
+        return list[ProjLight]
+
+    def version(self) -> float:
+        return math.nan
+
+    def check(self, data: bytes) -> bool:
+        return True  # V1 does not have a magic header, just check last
+
+    def load(self, data: bytes, *args: Any) -> list[ProjLight]:
         lights: list[ProjLight] = []
+        reader = io.BytesIO(data)
 
-        idx: int = 0
-        while idx < len(data) - 1:
-            time, duration, offx, offy, slen = struct.unpack(
-                "ffbbI", data[idx : idx + 16]
-            )
-            idx += 16
+        while True:
+            d = reader.read(16)
+            if len(d) == 0:
+                break
 
-            name = data[idx : idx + slen].decode()
-            idx += slen
+            time, duration, offx, offy, slen = struct.unpack("ffbbI", d)
+            name = reader.read(slen).decode()
 
             lights.append(ProjLight(name, round(time, 2), duration, (offx, offy)))
 
         return lights
+
+    def dump(self, obj: list[ProjLight], *args: Any) -> bytes:
+        buff: list[bytes] = []
+
+        for l in obj:
+            buff.append(
+                struct.pack("ffbbI", l.time, l.duration, *(l.offset), len(l.light))
+            )
+
+            buff.append(l.light.encode())
+
+        return b"".join(buff)

@@ -1,8 +1,7 @@
-import os
 import sys
 import argparse
-import time
 
+from .utils.versioning import VersionLoader
 from .utils.daemon_thread import DaemonThread
 from .launchpad.base import Launchpad
 from .lighting.keyframes import Keyframes
@@ -37,6 +36,7 @@ def main() -> None:
     Project.clear()
 
     # Open and load things
+    VersionLoader.register_all()
     Lightmap.load_all()
     Keyframes.load_internal()
     Launchpad.open_all()

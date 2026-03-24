@@ -1,8 +1,10 @@
 import json
 import os
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 import zipfile
 import numpy as np
+
+from CCv2.utils.versioning import VersionLoader
 
 from .. import constants
 from ..audio.track import AudioTrack
@@ -12,9 +14,6 @@ from ..ptypes import AudioRaw, int2
 from ..utils.json_wrapper import Json
 from ..utils.ui_property import UiProperty
 from ..lighting.keyframes import Keyframes
-
-if TYPE_CHECKING:
-    from .loader import ProjectLoader
 
 
 class ProjButton:
@@ -52,19 +51,16 @@ class Project:
             try:
                 with zipfile.ZipFile(path, "r") as zfile:
                     zfile.extractall(path=constants.CACHE)
+
+                p = VersionLoader.load_best(Project, b"")
+                p.load_path = path
+
+                Project.CURRENT_PROJECT.v = p
+                Keyframes.load()
+                return
+
             except RuntimeError:
                 raise RuntimeError("The provided file is not a valid CCv2 cover file!")
-
-            for v in Project.versions():
-                if v.check():
-                    p = v.load()
-                    p.load_path = path
-
-                    Project.CURRENT_PROJECT.v = p
-                    Keyframes.load()
-                    return
-
-            raise RuntimeError("The provided file is not a valid CCv2 cover file!")
         finally:
             Launchpad.resume_read()
 
@@ -74,7 +70,7 @@ class Project:
 
         Launchpad.pause_read()
 
-        Project.versions()[-1].dump(Project.CURRENT_PROJECT.v)
+        VersionLoader.dump_best(Project, Project.CURRENT_PROJECT.v)
 
         with zipfile.ZipFile(
             path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
@@ -122,12 +118,6 @@ class Project:
             else:
                 Project._clear(af)
                 os.removedirs(af)
-
-    @staticmethod
-    def versions() -> "list[ProjectLoader]":
-        from .loader import ProjectV1
-
-        return [ProjectV1()]
 
     @staticmethod
     def load_audio(path: str) -> list[AudioTrack]:
