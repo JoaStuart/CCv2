@@ -2,8 +2,8 @@ import abc
 import re
 import threading
 import time
-from typing import Optional
-import pygame.midi as midi
+from typing import Any, Callable, Optional
+import rtmidi
 
 from ..utils.daemon_thread import DaemonThread
 from ..launchpad.route import LaunchpadRouter
@@ -12,9 +12,6 @@ from .. import logger
 from ..ptypes import int2
 from ..utils.color import col
 from ..utils.ui_property import UiProperty
-
-
-midi.init()
 
 
 def register_adapters() -> None:
@@ -35,7 +32,8 @@ class Launchpad(abc.ABC):
     INPUTS: "list[LaunchpadIn]" = []
     OUTPUTS: "list[LaunchpadOut]" = []
 
-    UNPAUSE_READ: threading.Event = threading.Event()
+    _MIDI_IN = rtmidi.MidiIn()  # type: ignore
+    _MIDI_OUT = rtmidi.MidiOut()  # type: ignore
 
     PAGE: UiProperty[int] = UiProperty(0)
 
@@ -43,14 +41,6 @@ class Launchpad(abc.ABC):
     @abc.abstractmethod
     def name_re() -> str:
         pass
-
-    @staticmethod
-    def pause_read() -> None:
-        Launchpad.UNPAUSE_READ.clear()
-
-    @staticmethod
-    def resume_read() -> None:
-        Launchpad.UNPAUSE_READ.set()
 
     @staticmethod
     def get_by_name_in(name: str) -> "Optional[type[LaunchpadIn]]":
@@ -72,33 +62,32 @@ class Launchpad(abc.ABC):
 
     @staticmethod
     def open_all() -> None:
-        for i in range(midi.get_count()):
-            Launchpad.load(i)
+        for i in range(Launchpad._MIDI_IN.get_port_count()):
+            Launchpad.load_input(i)
+
+        for i in range(Launchpad._MIDI_OUT.get_port_count()):
+            Launchpad.load_output(i)
 
         LaunchpadChecker()  # Start the checker
 
     @staticmethod
-    def load(index: int) -> None:
-        _, name, inp, outp, _ = midi.get_device_info(index)
-        logger.debug(
-            "Discovered MIDI device '%s' :: %s%s",
-            name.decode(),
-            "I" if inp > 0 else "-",
-            "O" if outp > 0 else "-",
-        )
+    def load_input(index: int) -> None:
+        name = Launchpad._MIDI_IN.get_port_name(index)
 
-        if inp == 1:
-            tpe = Launchpad.get_by_name_in(name.decode())
-            if tpe:
-                Launchpad.INPUTS.append(tpe(index, name.decode()))
-                logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
+        tpe = Launchpad.get_by_name_in(name)
+        if tpe:
+            Launchpad.INPUTS.append(tpe(index, name))
+            logger.debug("Opened %s as %s", name, tpe.__name__)
 
-        if outp == 1:
-            tpe = Launchpad.get_by_name_out(name.decode())
-            if tpe:
-                Launchpad.OUTPUTS.append(lp := tpe(index, name.decode()))
-                lp.send_welcome_messages()
-                logger.debug("Opened %s as %s", name.decode(), tpe.__name__)
+    @staticmethod
+    def load_output(index: int) -> None:
+        name = Launchpad._MIDI_IN.get_port_name(index)
+
+        tpe = Launchpad.get_by_name_out(name)
+        if tpe:
+            Launchpad.OUTPUTS.append(lp := tpe(index, name))
+            lp.send_welcome_messages()
+            logger.debug("Opened %s as %s", name, tpe.__name__)
 
     @staticmethod
     def broadcast_light(cmd: int, pos: int2, color: col) -> None:
@@ -175,28 +164,70 @@ class Launchpad(abc.ABC):
 
 class LaunchpadChecker(DaemonThread):
     def __init__(self) -> None:
-        self._last_count = midi.get_count()
+        self._last_in_count: int = Launchpad._MIDI_IN.get_port_count()
+        self._last_out_count: int = Launchpad._MIDI_OUT.get_port_count()
 
         super().__init__("MidiChecker")
 
     def thread_loop(self) -> None:
         time.sleep(0.5)
-        new_count = midi.get_count()
-        if new_count > self._last_count:
-            for i in range(self._last_count, new_count):
-                Launchpad.load(i)
 
-            self._last_count = new_count
+        self._last_in_count = self._check(
+            self._last_in_count,
+            Launchpad._MIDI_IN,
+            Launchpad.INPUTS,
+            Launchpad.load_input,
+        )
+        self._last_out_count = self._check(
+            self._last_out_count,
+            Launchpad._MIDI_OUT,
+            Launchpad.OUTPUTS,
+            Launchpad.load_output,
+        )
+
+    def _check(
+        self,
+        last_ports: int,
+        midi: Any,
+        active: list[LaunchpadIn] | list[LaunchpadOut],
+        load: Callable[[int], None],
+    ) -> int:
+        new_ports: int = midi.get_port_count()
+
+        if new_ports > last_ports:
+            for i in range(new_ports):
+                if not self._has_port_named(midi.get_port_name(i), active):
+                    load(i)
+
+        elif new_ports < last_ports:
+            port_names: list[str] = midi.get_ports()
+
+            for i in range(len(active) - 1, -1, -1):
+                a = active[i]
+                if a.midiname not in port_names:
+                    a.close()
+                    active.pop(i)
+
+        return new_ports
+
+    def _has_port_named(
+        self, name: str, active: list[LaunchpadIn] | list[LaunchpadOut]
+    ) -> bool:
+        for a in active:
+            if a.midiname == name:
+                return True
+
+        return False
 
 
-class LaunchpadIn(DaemonThread, Launchpad):
+class LaunchpadIn(Launchpad):
 
     def __init__(self, index: int, midiname: str) -> None:
         self._midiname = midiname
-        self._in = midi.Input(index)
+        self._in = Launchpad._MIDI_IN.open_port(index)
         self._callback: LaunchpadRouter = LaunchpadRouter(self)
 
-        super().__init__("MidiReader-%d" % index)
+        self._in.set_callback(self._on_data)
 
     @property
     def midiname(self) -> str:
@@ -210,32 +241,24 @@ class LaunchpadIn(DaemonThread, Launchpad):
     def callback(self, callback: LaunchpadRouter) -> None:
         self._callback = callback
 
-    def thread_loop(self) -> None:
-        Launchpad.UNPAUSE_READ.wait()
+    def _on_data(self, event: tuple[list[int], float], *args) -> None:
+        data = event[0]
+        assert isinstance(data, list)
 
-        try:
-            if not self._in.poll():
-                time.sleep(0.01)
-                return
+        for _ in range(len(data), 4):
+            data.append(0)
 
-            messages = self._in.read(1)
-            if len(messages) == 0:
-                return
+        self._callback.route(*data)
 
-            data = messages[0][0]
-            assert isinstance(data, list)
-
-            self._callback.route(*data)
-        except RuntimeError:
-            self._running = False
-            return
+    def close(self) -> None:
+        self._in.close_port()
 
 
 class LaunchpadOut(Launchpad):
 
     def __init__(self, index: int, midiname: str) -> None:
         self._midiname = midiname
-        self._out = midi.Output(index)
+        self._out = Launchpad._MIDI_OUT.open_port(index)
         self._lightmap = Lightmap.MAPS[self.lightmap()]
 
     @property
@@ -243,26 +266,21 @@ class LaunchpadOut(Launchpad):
         return self._midiname
 
     def send(self, data: list[int]) -> None:
-        try:
-            if len(data) > 4:
-                self._out.write_sys_ex(0, data)
-            else:
-                self._out.write([[data, 0]])
-        except Exception as e:
-            logger.warning(
-                "Failed to send light to %s because of %s. Detaching launchpad...",
-                self._midiname,
-                e.args[0],
-            )
-
-            i = Launchpad.OUTPUTS.index(self)
-            Launchpad.OUTPUTS.pop(i)
-            Launchpad.INPUTS.pop(i)
+        self._out.send_message(data)
 
     def send_welcome_messages(self) -> None:
         for m in self._welcome_messages():
             self.send(m)
 
+        from ..lighting.lightmanager import LightManager
+
+        kf = LightManager().get_active_view()
+        for pos, col in kf.items():
+            self.send_light(Launchpad.NOTE_ON, pos, col)
+
     def send_light(self, cmd: int, pos: int2, color: col) -> None:
         note, cmd = self.xy_to_midi(pos, cmd)
         self.send([cmd, note, self._lightmap.closest(color)])
+
+    def close(self) -> None:
+        self._out.close_port()

@@ -54,8 +54,6 @@ def main() -> None:
 
     splash_finish = splash_animation()
 
-    Launchpad.resume_read()
-
     if args.oldui:
         from .ui.main_ui import open_and_run
     else:

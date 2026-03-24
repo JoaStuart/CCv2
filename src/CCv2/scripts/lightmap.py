@@ -1,5 +1,7 @@
 import os
 
+from ..utils.versioning import VersionLoader
+
 from .. import constants
 from ..lighting.lightmap import Lightmap
 from ..utils.color import col
@@ -36,7 +38,6 @@ def create_lightmap() -> None:
 
         lm[ikey] = icol
 
-    ver = Lightmap.versions()[-1]
-
+    VersionLoader.register_all()
     with open(os.path.join(constants.LIGHTMAPS, name), "wb") as wf:
-        wf.write(ver.dump(lm))
+        wf.write(VersionLoader.dump_best(Lightmap, lm))

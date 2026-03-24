@@ -215,6 +215,9 @@ class LightManager(DaemonThread):
         for r in self._receiver:
             r.finish()
 
+    def get_active_view(self) -> Kf:
+        return self._current_launchpad
+
 
 class LightReceiver(abc.ABC):
     @abc.abstractmethod

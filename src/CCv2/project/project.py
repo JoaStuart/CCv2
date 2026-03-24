@@ -4,8 +4,7 @@ from typing import Any, Optional
 import zipfile
 import numpy as np
 
-from CCv2.utils.versioning import VersionLoader
-
+from ..utils.versioning import VersionLoader
 from .. import constants
 from ..audio.track import AudioTrack
 from .. import logger
@@ -43,32 +42,26 @@ class Project:
     def load(path: str) -> None:
         from ..launchpad.base import Launchpad
 
+        logger.debug("Clearing cache")
+        Project._clear()
+
         try:
-            Launchpad.pause_read()
-            logger.debug("Clearing cache")
-            Project._clear()
+            with zipfile.ZipFile(path, "r") as zfile:
+                zfile.extractall(path=constants.CACHE)
 
-            try:
-                with zipfile.ZipFile(path, "r") as zfile:
-                    zfile.extractall(path=constants.CACHE)
+            p = VersionLoader.load_best(Project, b"")
+            p.load_path = path
 
-                p = VersionLoader.load_best(Project, b"")
-                p.load_path = path
+            Project.CURRENT_PROJECT.v = p
+            Keyframes.load()
+            return
 
-                Project.CURRENT_PROJECT.v = p
-                Keyframes.load()
-                return
-
-            except RuntimeError:
-                raise RuntimeError("The provided file is not a valid CCv2 cover file!")
-        finally:
-            Launchpad.resume_read()
+        except RuntimeError:
+            raise RuntimeError("The provided file is not a valid CCv2 cover file!")
 
     @staticmethod
     def save(path: str) -> None:
         from ..launchpad.base import Launchpad
-
-        Launchpad.pause_read()
 
         VersionLoader.dump_best(Project, Project.CURRENT_PROJECT.v)
 
@@ -76,8 +69,6 @@ class Project:
             path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=5
         ) as zfile:
             Project._save_dir(zfile)
-
-        Launchpad.resume_read()
 
     @staticmethod
     def _save_dir(

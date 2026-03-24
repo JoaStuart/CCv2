@@ -15,6 +15,7 @@ dependencies = [
     "scipy==1.17.0",
     "jpyweb @ git+https://github.com/joastuart/jpyweb.git",
     "av==16.1.0",
+    "python-rtmidi==1.5.8",
 ]
 
 [build-system]
