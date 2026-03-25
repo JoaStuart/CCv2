@@ -13,21 +13,22 @@ class LaunchpadRouter:
         from ..launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
-        if cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON:
+        if (cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON) and a1 > 0:
             note = self._lp.midi_to_xy(a0, cmd)
+            cx, cy = self._lp.clear_button()
+            if note[0] == cx and note[1] == cy:
+                LaunchpadReceiver.route_clear()
+
             note = (
                 note[0] + self._lp.offx,
                 note[1] + self._lp.offy,
             )
 
-            if a1 == 0:
-                self.note_off(*note)
-            else:
-                if note[0] == 8 and note[1] >= 0:
-                    Launchpad.PAGE.v = note[1]
+            if note[0] == 8 and note[1] >= 0:
+                Launchpad.PAGE.v = note[1]
 
-                self.note_on(*note, a1)
-        elif cnc == Launchpad.NOTE_OFF:
+            self.note_on(*note, a1)
+        elif cnc == Launchpad.NOTE_OFF or a1 == 0:
             self.note_off(*self._lp.midi_to_xy(a0, cmd))
 
     def note_on(self, x: int, y: int, _: int) -> None:
@@ -59,10 +60,19 @@ class LaunchpadReceiver(abc.ABC):
         if r := LaunchpadReceiver.ACTIVE_RECEIVER:
             r.note_off(x, y)
 
+    @staticmethod
+    def route_clear() -> None:
+        if r := LaunchpadReceiver.ACTIVE_RECEIVER:
+            r.btn_clear()
+
     @abc.abstractmethod
     def note_on(self, x: int, y: int) -> None:
         pass
 
     @abc.abstractmethod
     def note_off(self, x: int, y: int) -> None:
+        pass
+
+    @abc.abstractmethod
+    def btn_clear(self) -> None:
         pass

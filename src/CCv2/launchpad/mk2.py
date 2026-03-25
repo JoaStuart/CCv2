@@ -1,3 +1,4 @@
+from CCv2.ptypes import int2
 from .base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
@@ -26,6 +27,9 @@ class LaunchpadMk2(Launchpad):
 
     def check_bounds(self, pos: tuple[int, int]) -> bool:
         return pos[0] >= 0 and pos[0] <= 8 and pos[1] >= -1 and pos[1] <= 7
+
+    def clear_button(self) -> tuple[int, int]:
+        return 0, -1
 
     def _welcome_messages(self) -> list[list[int]]:
         return [

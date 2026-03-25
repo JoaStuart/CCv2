@@ -1,3 +1,4 @@
+from CCv2.ptypes import int2
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
@@ -45,6 +46,9 @@ class LaunchpadS(Launchpad):
 
     def lightmap(self) -> str:
         return "ClassicMiniS"
+
+    def clear_button(self) -> tuple[int, int]:
+        return 0, -1
 
     def _welcome_messages(self) -> list[list[int]]:
         return [

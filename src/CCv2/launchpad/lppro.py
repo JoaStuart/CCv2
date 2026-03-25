@@ -1,11 +1,11 @@
 from CCv2.ptypes import int2
-from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
+from .base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
-class LaunchpadMk3Pro(Launchpad):
+class LaunchpadPro(Launchpad):
     @staticmethod
     def name_re() -> str:
-        return r"LPProMK3 MIDI"
+        return r"Launchpad Pro(.*?)Live"
 
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:
@@ -24,23 +24,19 @@ class LaunchpadMk3Pro(Launchpad):
             if midi >= 0x74 and midi <= 0x7B:  # Upper bottom row
                 return midi - 0x74, 8
 
-            if midi >= 0xC and midi <= 0x13:  # Lower bottom row
-                return midi - 0xC, 9
-
         else:  # ControlChange
             if midi >= 0x0A and midi <= 0x63:
                 return midi % 10 - 1, 9 - midi // 10 - 1
 
             if midi >= 0x65 and midi <= 0x6C:  # Upper bottom row CC
                 return midi - 0x66, 8
-            if midi >= 0x1 and midi <= 0x8:  # Lower bottom row CC
-                return midi - 1, 8
 
         if midi < 99:
             return midi % 10 - 1, 9 - midi // 10 - 1
         return midi - 104, -1
 
     def xy_to_midi(self, xy: tuple[int, int], mode: int) -> tuple[int, int]:
+        mode += 5
         x, y = xy
 
         if y == -1:
@@ -56,16 +52,22 @@ class LaunchpadMk3Pro(Launchpad):
                 return (96 - (4 * y)) + (x - 4), mode
         elif y == 8:  # Upper bottom row
             return 116 + x, mode
-        elif y == 9:  # Lower bottom row
-            return 12 + x, mode
         else:
             return 0, mode
+
+    def special_xy_to_midi(
+        self, pos: tuple[int, int], mode: int, color: int
+    ) -> list[int] | None:
+        if pos[0] == 8 and pos[1] == -1:
+            return [0xF0, 0x00, 0x20, 0x29, 0x02, 0x10, 0x0A, 99, color, 0xF7]
+
+        return None
 
     def lightmap(self) -> str:
         return "Mk2+Realism"
 
     def check_bounds(self, pos: tuple[int, int]) -> bool:
-        return pos[0] >= -1 and pos[0] <= 8 and pos[1] >= -1 and pos[1] <= 9
+        return pos[0] >= -1 and pos[0] <= 8 and pos[1] >= -1 and pos[1] <= 8
 
     def clear_button(self) -> tuple[int, int]:
         return -1, 7
@@ -78,19 +80,28 @@ class LaunchpadMk3Pro(Launchpad):
                 0x20,
                 0x29,
                 0x02,
-                0x0E,
-                0x00,
-                0x14,
-                0x00,
+                0x10,
+                0x21,
                 0x00,
                 0xF7,
-            ],  # Change to USER1 mode
+            ],  # Change to ableton mode
+            [
+                0xF0,
+                0x00,
+                0x20,
+                0x29,
+                0x02,
+                0x10,
+                0x22,
+                0x03,
+                0xF7,
+            ],  # Change to USER layout
         ]
 
 
-class LaunchpadMk3ProIn(LaunchpadMk3Pro, LaunchpadIn):
+class LaunchpadProIn(LaunchpadPro, LaunchpadIn):
     pass
 
 
-class LaunchpadMk3ProOut(LaunchpadMk3Pro, LaunchpadOut):
+class LaunchpadProOut(LaunchpadPro, LaunchpadOut):
     pass

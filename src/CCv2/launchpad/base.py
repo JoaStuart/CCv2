@@ -1,6 +1,5 @@
 import abc
 import re
-import threading
 import time
 from typing import Any, Callable, Optional
 import rtmidi
@@ -18,6 +17,7 @@ def register_adapters() -> None:
     from . import lps
     from . import mk2
     from . import mk3pro
+    from . import lppro
 
 
 class Launchpad(abc.ABC):
@@ -78,6 +78,7 @@ class Launchpad(abc.ABC):
         if tpe:
             Launchpad.INPUTS.append(tpe(index, name))
             logger.debug("Opened %s as %s", name, tpe.__name__)
+            Launchpad._MIDI_IN = rtmidi.MidiIn()  # type: ignore
 
     @staticmethod
     def load_output(index: int) -> None:
@@ -88,6 +89,7 @@ class Launchpad(abc.ABC):
             Launchpad.OUTPUTS.append(lp := tpe(index, name))
             lp.send_welcome_messages()
             logger.debug("Opened %s as %s", name, tpe.__name__)
+            Launchpad._MIDI_OUT = rtmidi.MidiOut()  # type: ignore
 
     @staticmethod
     def broadcast_light(cmd: int, pos: int2, color: col) -> None:
@@ -143,6 +145,11 @@ class Launchpad(abc.ABC):
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         pass
 
+    def special_xy_to_midi(
+        self, pos: int2, mode: int, color: int
+    ) -> Optional[list[int]]:
+        return None
+
     @abc.abstractmethod
     def xy_to_midi(self, xy: tuple[int, int], mode: int) -> tuple[int, int]:
         pass
@@ -153,6 +160,10 @@ class Launchpad(abc.ABC):
 
     @abc.abstractmethod
     def check_bounds(self, pos: int2) -> bool:
+        pass
+
+    @abc.abstractmethod
+    def clear_button(self) -> int2:
         pass
 
     def _welcome_messages(self) -> list[list[int]]:
@@ -266,7 +277,10 @@ class LaunchpadOut(Launchpad):
         return self._midiname
 
     def send(self, data: list[int]) -> None:
-        self._out.send_message(data)
+        try:
+            self._out.send_message(data)
+        except:
+            logger.error("Could not send midi message %s", str(data))
 
     def send_welcome_messages(self) -> None:
         for m in self._welcome_messages():
@@ -279,8 +293,17 @@ class LaunchpadOut(Launchpad):
             self.send_light(Launchpad.NOTE_ON, pos, col)
 
     def send_light(self, cmd: int, pos: int2, color: col) -> None:
+        if not self.check_bounds(pos):
+            return
+
+        vel = self._lightmap.closest(color)
+        special = self.special_xy_to_midi(pos, cmd, vel)
+        if special is not None:
+            self.send(special)
+            return
+
         note, cmd = self.xy_to_midi(pos, cmd)
-        self.send([cmd, note, self._lightmap.closest(color)])
+        self.send([cmd, note, vel])
 
     def close(self) -> None:
         self._out.close_port()

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from typing import Optional
 from jpyweb import (
     WsControlCode,
@@ -442,7 +443,7 @@ def wsapi(req: WsData[str]) -> WsData | None:
         }.get(t, print)(data)
 
     except:
-        logger.error("Failed handling full api endpoint", stack_info=True)
+        logger.error("Failed handling full api endpoint\n%s", traceback.format_exc())
 
 
 @lp.binary
@@ -507,21 +508,19 @@ class PlayRoute(LaunchpadReceiver):
         return "tl"
 
     def note_on(self, x: int, y: int) -> None:
-        if x == -1 and y == -1:
-            r = AudioRouter()
-            r.stop_all()
-
-            LightManager().stop()
-            Launchpad.broadcast_clear()
-        elif x == 8 and y >= 0:
-            Launchpad.PAGE.v = y
-
         proj = _proj().baked
         if not proj:
             return
 
         self._play_note(proj, x, y)
         self._play_light(proj, x, y)
+
+    def btn_clear(self) -> None:
+        r = AudioRouter()
+        r.stop_all()
+
+        LightManager().stop()
+        Launchpad.broadcast_clear()
 
     def _play_note(self, proj: BakedProject, x: int, y: int) -> None:
         aud = proj.get_audio(Launchpad.PAGE.v, (x, y))
@@ -579,6 +578,9 @@ class CreateRoute(LaunchpadReceiver):
             )
         )
         timestamps.change()
+
+    def btn_clear(self) -> None:
+        return super().btn_clear()
 
     def note_off(self, x: int, y: int) -> None:
         return super().note_off(x, y)
@@ -752,6 +754,9 @@ class GenerateRoute(LaunchpadReceiver):
                 self._active_gradients[x, y] = grad
 
         self._display_current()
+
+    def btn_clear(self) -> None:
+        return super().btn_clear()
 
     def note_off(self, x: int, y: int) -> None:
         return super().note_off(x, y)
