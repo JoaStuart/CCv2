@@ -9,7 +9,7 @@ class LaunchpadRouter:
     def __init__(self, lp: "LaunchpadIn") -> None:
         self._lp = lp
 
-    def route(self, cmd: int, a0: int, a1: int, _: int) -> None:
+    def route(self, cmd: int, a0: int, a1: int, *args) -> None:
         from ..launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
@@ -19,14 +19,13 @@ class LaunchpadRouter:
             if note[0] == cx and note[1] == cy:
                 LaunchpadReceiver.route_clear()
 
+            if note[0] == 8 and note[1] >= 0:
+                Launchpad.PAGE.v = note[1]
+
             note = (
                 note[0] + self._lp.offx,
                 note[1] + self._lp.offy,
             )
-
-            if note[0] == 8 and note[1] >= 0:
-                Launchpad.PAGE.v = note[1]
-
             self.note_on(*note, a1)
         elif cnc == Launchpad.NOTE_OFF or a1 == 0:
             self.note_off(*self._lp.midi_to_xy(a0, cmd))

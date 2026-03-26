@@ -61,8 +61,6 @@ class Project:
 
     @staticmethod
     def save(path: str) -> None:
-        from ..launchpad.base import Launchpad
-
         VersionLoader.dump_best(Project, Project.CURRENT_PROJECT.v)
 
         with zipfile.ZipFile(
@@ -111,15 +109,28 @@ class Project:
                 os.removedirs(af)
 
     @staticmethod
-    def load_audio(path: str) -> list[AudioTrack]:
-        return [AudioTrack(os.path.join(path, k)) for k in os.listdir(path)]
+    def load_audio(path: Optional[str]) -> Optional[AudioTrack]:
+        if path is not None:
+            return AudioTrack(os.path.join(constants.CACHE_AUDIO, path))
+
+        auddir = os.listdir(constants.CACHE_AUDIO)
+        if len(auddir) == 0:
+            return None
+
+        for a in auddir:
+            if a.startswith("."):
+                continue
+
+            return AudioTrack(os.path.join(constants.CACHE_AUDIO, a))
 
     @staticmethod
     def _dispatch_bake(*args) -> None:
         Project.CURRENT_PROJECT.v.bake()
 
     def __init__(self) -> None:
-        self.tracks: UiProperty[list[AudioTrack]] = UiProperty([])
+        self.track: UiProperty[Optional[AudioTrack]] = UiProperty[AudioTrack | None](
+            None
+        )
 
         self.timestamps: UiProperty[list[ProjButton]] = UiProperty([])
         self.timestamps.add_listener(lambda a: a.sort(key=lambda t: t.time))
@@ -138,16 +149,11 @@ class Project:
         self.baked = BakedProject(self)
 
     def get_segment(self, start: int, end: int) -> AudioRaw:
-        out = np.zeros((end - start, 2), dtype=np.float32)
 
-        for k in self.tracks.v:
-            data = k.track[start:end, :]
-
-            pad_amount = end - start - len(data)
-            data = np.pad(
-                data, ((0, pad_amount), (0, 0)), mode="constant", constant_values=0
-            )
-            out += data * k.volume
+        if self.track.v:
+            out = self.track.v.track[start:end, :].astype(dtype=np.float32)
+        else:
+            out = np.zeros((end - start, 2), dtype=np.float32)
 
         info = np.iinfo(constants.SAMPLE_DEPTH)
 
@@ -170,10 +176,10 @@ class Project:
         return result.astype(constants.SAMPLE_DEPTH)
 
     def max_length(self) -> int:
-        if len(self.tracks.v) == 0:
+        if self.track.v is None:
             return 0
 
-        return max(t.track.shape[0] for t in self.tracks.v)
+        return self.track.v.track.shape[0]
 
 
 Project.CURRENT_PROJECT = UiProperty(Project())

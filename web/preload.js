@@ -92,9 +92,7 @@ const emptyElement = (el) => {
   while ((c = el.firstChild) !== null) el.removeChild(c);
 };
 
-const setTracks = (t) => {
-  if (t.length == 0) return;
-  t = t[0];
+const setTrack = (t) => {
   $("projduration").value = round2(t.length);
 
   $("track").querySelector("img").src = t.waveform;
@@ -327,8 +325,8 @@ const makeSettingLaunchpad = (lpType, l) => {
       offy: +inputY.value,
     });
 
-  inputX.onfocusout = setOffset;
-  inputY.onfocusout = setOffset;
+  inputX.addEventListener("focusout", setOffset);
+  inputY.addEventListener("focusout", setOffset);
 
   return tr;
 };
@@ -361,7 +359,7 @@ ws.onmessage = (ev) => {
       project: setProject,
       lightmap: setLightmap,
       lightrecv: setLightRecv,
-      tracks: setTracks,
+      track: setTrack,
       lighting: setLighting,
       timestamps: setButtons,
       keyframes: setKeyframes,

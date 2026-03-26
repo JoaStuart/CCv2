@@ -73,17 +73,26 @@ def proj_get() -> dict:
 
 
 def tracks_get() -> dict:
-    return {
-        "tracks": [
-            {
+    t = _proj().track.v
+    if t is not None:
+        return {
+            "track": {
                 "name": t.name,
                 "length": t.length,
                 "volume": t.volume,
                 "waveform": t.waveform,
                 "raw": make_data_uri(t.path),
             }
-            for t in _proj().tracks.v
-        ]
+        }
+
+    return {
+        "track": {
+            "name": "",
+            "length": 0,
+            "volume": 100,
+            "waveform": "about:blank",
+            "raw": "about:blank",
+        }
     }
 
 
@@ -242,8 +251,11 @@ def api_import_sound() -> None:
 
     logger.info("Loading audio track")
     proj = _proj()
-    proj.tracks.v.append(AudioTrack(out_path))
-    proj.tracks.change()
+    if proj.track.v is None:
+        proj.track.v = AudioTrack(out_path)
+    else:
+        proj.track.v.append(out_path)
+        proj.track.change()
 
 
 def api_response(req: WsData[str], data: dict) -> WsData:
@@ -384,8 +396,6 @@ def lpoffset_in_api(data):
     o = Launchpad.OUTPUTS[lid]
     o.offx = offx
     o.offy = offy
-
-    print(lid, offx, offy)
 
     api_update(launchpad_get())
 
@@ -768,7 +778,7 @@ _ROUTE: _WebRoute = PlayRoute()
 
 
 def _proj_change_listeners(p: "Project") -> None:
-    p.tracks.add_listener(lambda _: api_update(tracks_get()))
+    p.track.add_listener(lambda _: api_update(tracks_get()))
     p.lighting.add_listener(lambda _: api_update(lighting_get()))
     p.timestamps.add_listener(lambda _: api_update(timestamps_get()))
 

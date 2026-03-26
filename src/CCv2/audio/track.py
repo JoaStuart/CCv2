@@ -88,3 +88,22 @@ class AudioTrack:
         assert success
 
         return make_data_uri(buffer.tobytes(), "image/png")
+
+    def append(self, path: str) -> None:
+        logger.debug("Loading audio file `%s`...", path)
+
+        from scipy.io.wavfile import read, write
+
+        sr, data = read(path)
+        assert sr == self._sr
+
+        self._data = np.concatenate((self._data, data), axis=0)
+        self._waveform = self.to_waveform_uri()
+
+        os.remove(path)
+
+        write(
+            os.path.join(constants.CACHE_AUDIO, self.path),
+            self._sr,
+            self._data,
+        )

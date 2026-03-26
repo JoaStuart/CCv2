@@ -21,16 +21,16 @@ class ProjectV1(VersionLoader[Project]):
         return 1.0
 
     def load(self, data: bytes, *args: Any) -> Project:
-        tracks = Project.load_audio(constants.CACHE_AUDIO)
         proj_descr = self._load_project_descr()
+        track = Project.load_audio(proj_descr.get("track", None))
 
-        btns = self._read_buttons(proj_descr.get("pages").get_item("buttons", list))
+        btns = self._read_buttons(proj_descr.get("pages", {}).get("buttons", []))
         with open(os.path.join(constants.CACHE_PAGES, "lights.lpl"), "rb") as file:
             lights = VersionLoader.load_best(list[ProjLight], file.read())
 
         p = Project()
-        p.tracks.v = tracks
-        p.title = proj_descr.get_item("title", str)
+        p.track.v = track
+        p.title = proj_descr["title"]
         p.timestamps.v = btns
         p.lighting.v = lights
         return p
@@ -53,21 +53,17 @@ class ProjectV1(VersionLoader[Project]):
     def _pdesc(self) -> str:
         return os.path.join(constants.CACHE, "project" + constants.PDESC_EXT)
 
-    def _load_project_descr(self) -> ProjDescription:
+    def _load_project_descr(self) -> dict:
         try:
             with open(self._pdesc(), "r") as file:
                 data = file.read()
         except Exception:
             raise RuntimeError("Could not load project description file!")
 
-        return ProjDescription.loads(data)
+        return json.loads(data)
 
     def check(self, data: bytes) -> bool:
-        return (
-            self._load_project_descr()
-            .get_item("$schema", str)
-            .endswith("project_v1.json")
-        )
+        return self._load_project_descr().get("$schema", "").endswith("project_v1.json")
 
     def _create_paths(self) -> None:
         for p in [
@@ -81,6 +77,7 @@ class ProjectV1(VersionLoader[Project]):
         proj_data = {
             "$schema": constants.SCHEMA_PROJECT_V1,
             "title": proj.title,
+            "track": proj.track.v.path if proj.track.v is not None else None,
             "pages": {
                 "buttons": [],
                 "lights": ["lights.lpl"],

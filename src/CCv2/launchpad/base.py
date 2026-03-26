@@ -94,10 +94,6 @@ class Launchpad(abc.ABC):
     @staticmethod
     def broadcast_light(cmd: int, pos: int2, color: col) -> None:
         for o in Launchpad.OUTPUTS:
-            pos = (pos[0] - o.offx, pos[1] - o.offy)
-            if not o.check_bounds(pos):
-                continue
-
             o.send_light(cmd, pos, color)
 
     @staticmethod
@@ -256,9 +252,6 @@ class LaunchpadIn(Launchpad):
         data = event[0]
         assert isinstance(data, list)
 
-        for _ in range(len(data), 4):
-            data.append(0)
-
         self._callback.route(*data)
 
     def close(self) -> None:
@@ -293,6 +286,8 @@ class LaunchpadOut(Launchpad):
             self.send_light(Launchpad.NOTE_ON, pos, col)
 
     def send_light(self, cmd: int, pos: int2, color: col) -> None:
+        pos = (pos[0] - self.offx, pos[1] - self.offy)
+
         if not self.check_bounds(pos):
             return
 
