@@ -1,10 +1,10 @@
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
-class LaunchpadS(Launchpad):
+class LaunchpadClassic(Launchpad):
     @staticmethod
     def name_re() -> str:
-        return r"Launchpad S"
+        return r"Launchpad MIDI"
 
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:
@@ -59,9 +59,9 @@ class LaunchpadS(Launchpad):
         ]
 
 
-class LaunchpadSIn(LaunchpadS, LaunchpadIn):
+class LaunchpadClassicIn(LaunchpadClassic, LaunchpadIn):
     pass
 
 
-class LaunchpadSOut(LaunchpadS, LaunchpadOut):
+class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
     pass
