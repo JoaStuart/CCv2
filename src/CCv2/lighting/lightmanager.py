@@ -212,6 +212,8 @@ class LightManager(DaemonThread):
             for r in self._receiver:
                 r[pos] = vel
 
+        Launchpad.broadcast_finish()
+
         for r in self._receiver:
             r.finish()
 

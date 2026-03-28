@@ -1,3 +1,7 @@
+import math
+from ..lighting.lightmanager import LightManager
+from ..ptypes import int2
+from ..utils.color import col
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
@@ -64,4 +68,90 @@ class LaunchpadClassicIn(LaunchpadClassic, LaunchpadIn):
 
 
 class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
-    pass
+
+    def __init__(self, index: int, midiname: str) -> None:
+        super().__init__(index, midiname)
+
+        self._message_map: dict[int2, int] = {}
+
+    def send_light(self, cmd: int, pos: tuple[int, int], color: col) -> None:
+        pos = (pos[0] - self.offx, pos[1] - self.offy)
+
+        if not self.check_bounds(pos):
+            return
+
+        self._message_map[pos] = self._lightmap.closest(color)
+
+    def _rapid_messages_needed(self) -> int:
+        msg_needed = 0
+
+        for (x, y), _ in self._message_map.items():
+            n = 0
+
+            if x == 8:
+                n = math.ceil((64 + y) / 2)
+            elif y == -1:
+                n = math.ceil((64 + 8 + x) / 2)
+            else:
+                n = math.ceil((y * 8 + x + 1) / 2)
+
+            if n > msg_needed:
+                msg_needed = n
+
+        return msg_needed
+
+    def _rapid_to_xy(self, rapid_num: int) -> int2:
+        if rapid_num < 64:
+            return rapid_num % 8, rapid_num // 8
+        elif rapid_num < 64 + 8:
+            return 8, rapid_num - 64
+        else:
+            return rapid_num - 64 - 8, -1
+
+    def _rapid_velo_at(self, xy: int2, full_frame: dict[int2, col]) -> int:
+        if xy in self._message_map:
+            vel = self._message_map[xy]
+            del self._message_map[xy]
+        else:
+            vel = self._lightmap.closest(full_frame.get(xy, col(0, 0, 0)))
+
+        return vel
+
+    def _send_data_rapid(self) -> None:
+        RAPID_UPDATE = Launchpad.NOTE_ON + 2
+        rapid_num = 0
+
+        full_frame = LightManager().get_active_view()
+        full_rapid_msg = self._rapid_messages_needed()
+
+        # Check if sending leftover lights raw would be better
+        should_continue = lambda: (full_rapid_msg - rapid_num // 2) < len(
+            self._message_map
+        )
+
+        while len(self._message_map) > 0 and should_continue():
+            self.send(
+                [
+                    RAPID_UPDATE,
+                    self._rapid_velo_at(self._rapid_to_xy(rapid_num), full_frame),
+                    self._rapid_velo_at(self._rapid_to_xy(rapid_num + 1), full_frame),
+                ]
+            )
+
+            rapid_num += 2
+
+    def _send_data_raw(self) -> bool:
+        for xy, vel in self._message_map.items():
+            note, cmd = self.xy_to_midi(xy, Launchpad.NOTE_ON)
+            self.send([cmd, note, vel])
+
+        return len(self._message_map) > 0
+
+    def frame_finish(self) -> None:
+        self._send_data_rapid()
+        hassent = self._send_data_raw()
+
+        if not hassent:
+            self.send([Launchpad.NOTE_ON, 0, 0])
+
+        self._message_map = {}

@@ -111,6 +111,12 @@ class Launchpad(abc.ABC):
             else:
                 for d in data:
                     o.send_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
+                o.frame_finish()
+
+    @staticmethod
+    def broadcast_finish() -> None:
+        for o in Launchpad.OUTPUTS:
+            o.frame_finish()
 
     @staticmethod
     def simulate_down(x: int, y: int) -> None:
@@ -285,6 +291,9 @@ class LaunchpadOut(Launchpad):
         kf = LightManager().get_active_view()
         for pos, col in kf.items():
             self.send_light(Launchpad.NOTE_ON, pos, col)
+
+    def frame_finish(self) -> None:
+        pass
 
     def send_light(self, cmd: int, pos: int2, color: col) -> None:
         pos = (pos[0] - self.offx, pos[1] - self.offy)
