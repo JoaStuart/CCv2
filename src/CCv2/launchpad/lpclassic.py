@@ -1,4 +1,8 @@
 import math
+import threading
+import time
+
+from CCv2.utils.daemon_thread import DaemonThread
 from ..lighting.lightmanager import LightManager
 from ..ptypes import int2
 from ..utils.color import col
@@ -67,12 +71,30 @@ class LaunchpadClassicIn(LaunchpadClassic, LaunchpadIn):
     pass
 
 
+class LaunchpadClassicUpdater(DaemonThread):
+    def __init__(self, lp: LaunchpadClassicOut) -> None:
+        self._lp = lp
+
+        super().__init__("LpClassicUpdater")
+
+    def thread_loop(self) -> None:
+        wait = self._lp.next_update_at - time.time()
+        if wait > 0:
+            time.sleep(wait)
+
+        self._lp.frame_finish()
+
+
 class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
 
     def __init__(self, index: int, midiname: str) -> None:
         super().__init__(index, midiname)
 
         self._message_map: dict[int2, int] = {}
+        self.next_update_at: float = 0
+        self._currently_sending: threading.Event = threading.Event()
+
+        self._update_checker = LaunchpadClassicUpdater(self)
 
     def send_light(self, cmd: int, pos: tuple[int, int], color: col) -> None:
         pos = (pos[0] - self.offx, pos[1] - self.offy)
@@ -117,7 +139,7 @@ class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
 
         return vel
 
-    def _send_data_rapid(self) -> None:
+    def _send_data_rapid(self) -> int:
         RAPID_UPDATE = Launchpad.NOTE_ON + 2
         rapid_num = 0
 
@@ -140,18 +162,37 @@ class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
 
             rapid_num += 2
 
-    def _send_data_raw(self) -> bool:
+        return rapid_num // 2
+
+    def _send_data_raw(self) -> int:
         for xy, vel in self._message_map.items():
             note, cmd = self.xy_to_midi(xy, Launchpad.NOTE_ON)
             self.send([cmd, note, vel])
 
-        return len(self._message_map) > 0
+        return len(self._message_map)
 
     def frame_finish(self) -> None:
-        self._send_data_rapid()
-        hassent = self._send_data_raw()
+        if self._currently_sending.is_set() or self.next_update_at > time.time():
+            return
 
-        if not hassent:
+        self._currently_sending.set()
+
+        SEC_PER_MSG = 2.5 / 1000
+
+        msg_rapid = self._send_data_rapid()
+        msg_raw = self._send_data_raw()
+
+        if msg_raw == 0:
             self.send([Launchpad.NOTE_ON, 0, 0])
+            msg_raw = 1
+
+        messages_used = msg_rapid + msg_raw
+        self.next_update_at = time.time() + SEC_PER_MSG * messages_used
 
         self._message_map = {}
+
+        self._currently_sending.clear()
+
+    def close(self) -> None:
+        self._update_checker.cleanup()
+        return super().close()
