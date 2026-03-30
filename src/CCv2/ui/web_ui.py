@@ -226,6 +226,7 @@ def api_save_project_as() -> None:
     if path is None:
         return
 
+    _proj().load_path = path
     return api_save_project(path)
 
 
@@ -728,6 +729,7 @@ class GenerateRoute(LaunchpadReceiver):
 
         self._created_frames = [{}]
         self._display_frame = 0
+        self._active_gradients = {}
 
     def _display_current(self) -> None:
         if self._frame_event is not None:

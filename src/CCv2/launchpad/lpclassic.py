@@ -2,7 +2,7 @@ import math
 import threading
 import time
 
-from CCv2.utils.daemon_thread import DaemonThread
+from ..utils.daemon_thread import DaemonThread
 from ..lighting.lightmanager import LightManager
 from ..ptypes import int2
 from ..utils.color import col

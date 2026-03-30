@@ -26,6 +26,13 @@ class BakedProject:
         self._audios: PagedAudio = self._bake_audios()
         self._lights: PagedLight = self._bake_lighting()
 
+    def clear_positions(self) -> None:
+        for k in self._positions_audio.keys():
+            self._positions_audio[k] = 0
+
+        for k in self._positions_light.keys():
+            self._positions_light[k] = 0
+
     def _bake_lighting(self) -> PagedLight:
         lighting: PagedLight = {}
 

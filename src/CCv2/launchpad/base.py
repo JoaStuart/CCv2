@@ -110,23 +110,15 @@ class Launchpad(abc.ABC):
 
             else:
                 for d in data:
-                    o.send_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
+                    o.send_light(
+                        Launchpad.NOTE_ON, (d[0] + o.offx, d[1] + o.offy), col(0, 0, 0)
+                    )
                 o.frame_finish()
 
     @staticmethod
     def broadcast_finish() -> None:
         for o in Launchpad.OUTPUTS:
             o.frame_finish()
-
-    @staticmethod
-    def simulate_down(x: int, y: int) -> None:
-        for i in Launchpad.INPUTS:
-            i.callback.note_on(x, y, 0xFF)
-
-    @staticmethod
-    def simulate_up(x: int, y: int) -> None:
-        for i in Launchpad.INPUTS:
-            i.callback.note_off(x, y)
 
     @property
     def offx(self) -> int:

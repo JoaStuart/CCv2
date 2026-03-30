@@ -1,4 +1,3 @@
-from CCv2.ptypes import int2
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
 

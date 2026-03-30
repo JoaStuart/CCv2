@@ -46,6 +46,13 @@ class LaunchpadReceiver(abc.ABC):
 
     @staticmethod
     def route_click(x: int, y: int) -> None:
+        from ..launchpad.base import Launchpad
+
+        if x == 8 and y >= 0:
+            Launchpad.PAGE = y
+        if x == -1 and y == 7:
+            LaunchpadReceiver.route_clear()
+
         LaunchpadReceiver.route_on(x, y)
         LaunchpadReceiver.route_off(x, y)
 

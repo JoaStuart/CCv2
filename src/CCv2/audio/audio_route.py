@@ -11,13 +11,16 @@ from ..utils.daemon_thread import DaemonThread
 from ..ptypes import AudioRaw
 from ..singleton import singleton
 
-mx.init(
-    frequency=constants.SAMPLE_RATE,
-    channels=2,
-    size=constants.SAMPLE_DEPTH_PG,
-    allowedchanges=pygame.AUDIO_ALLOW_ANY_CHANGE,
-)
-mx.set_num_channels(constants.OUT_CHANNELS)
+
+def mx_init(devicename: str | None) -> None:
+    mx.init(
+        frequency=constants.SAMPLE_RATE,
+        channels=2,
+        size=constants.SAMPLE_DEPTH_PG,
+        allowedchanges=pygame.AUDIO_ALLOW_ANY_CHANGE,
+        devicename=devicename,
+    )
+    mx.set_num_channels(constants.OUT_CHANNELS)
 
 
 @singleton
@@ -27,6 +30,9 @@ class AudioRouter(DaemonThread):
             tuple[mx.Channel, float, Callable[[float], None], float]
         ] = []
         self._data_event: threading.Event = threading.Event()
+
+        if mx.get_init() is None:
+            mx_init(None)
 
         super().__init__("AudioTicker")
 
@@ -110,6 +116,3 @@ class AudioRouter(DaemonThread):
             return
 
         self._playing_audio.pop(target)
-
-
-AudioRouter()

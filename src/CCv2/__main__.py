@@ -1,6 +1,7 @@
 import sys
 import argparse
 
+from .audio import audio_route
 from .utils.versioning import VersionLoader
 from .utils.daemon_thread import DaemonThread
 from .launchpad.base import Launchpad
@@ -19,8 +20,8 @@ def main() -> None:
     for n, _ in SCRIPTS:
         parser.add_argument(f"--{n}", action="store_true")
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--oldui", action="store_true")
     parser.add_argument("--vpad", action="store_true")
+    parser.add_argument("--audiodevice", type=str, required=False, default=None)
     parser.add_argument("file", nargs="?")
 
     args = parser.parse_args(sys.argv[1:])
@@ -36,6 +37,7 @@ def main() -> None:
     Project.clear()
 
     # Open and load things
+    audio_route.mx_init(args.audiodevice)
     VersionLoader.register_all()
     Lightmap.load_all()
     Keyframes.load_internal()
@@ -54,10 +56,7 @@ def main() -> None:
 
     splash_finish = splash_animation()
 
-    if args.oldui:
-        from .ui.main_ui import open_and_run
-    else:
-        from .ui.web_ui import open_and_run
+    from .ui.web_ui import open_and_run
 
     open_and_run(splash_finish, args)
 
