@@ -1,3 +1,18 @@
+# Copyright (C) 2026 JoaStuart
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import json
 import logging
 import os
@@ -532,6 +547,10 @@ class PlayRoute(LaunchpadReceiver):
 
         LightManager().stop()
         Launchpad.broadcast_clear()
+
+        baked = _proj().baked
+        if baked is not None:
+            baked.clear_positions()
 
     def _play_note(self, proj: BakedProject, x: int, y: int) -> None:
         aud = proj.get_audio(Launchpad.PAGE.v, (x, y))
