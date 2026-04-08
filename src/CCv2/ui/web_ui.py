@@ -18,7 +18,6 @@ import logging
 import os
 import socket
 import subprocess
-import sys
 import tempfile
 import threading
 import time
@@ -648,8 +647,6 @@ class GenerateRoute(LaunchpadReceiver):
         if self._current_type == "static":
             self._current_vel = value
         else:
-            if len(self._current_gradient) >= 16:
-                self._current_gradient.pop()
             self._current_gradient.append(value)
 
     def light_type(self, t: str) -> None:

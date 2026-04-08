@@ -13,12 +13,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from typing import Callable
 from .list_audio_devices import list_audio_devices
 from .saveconvert import convert_savefile
 from .lightmap import create_lightmap
+from .perfectgradient import gradient_main
 
-SCRIPTS = [
+type Script = Callable[[list[str]], int]
+
+SCRIPTS: list[tuple[str, Script]] = [
     ("saveconvert", convert_savefile),
     ("lightmap", create_lightmap),
     ("listaudiodevices", list_audio_devices),
+    ("perfectgradient", gradient_main),
 ]

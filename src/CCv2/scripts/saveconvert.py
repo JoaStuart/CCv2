@@ -34,16 +34,16 @@ def zip_dir(zfile: zipfile.ZipFile, root: str, arcname: str = "") -> None:
             zip_dir(zfile, af, arcname + f + "/")
 
 
-def convert_savefile() -> None:
+def convert_savefile(_args: list[str]) -> int:
     out_file = input("Path of `out.txt` > ").strip()
     if not os.path.isfile(out_file):
         print("File not found!")
-        return
+        return 1
 
     cache_dir = input("Path to CCv2's cache directory > ").strip()
     if not os.path.isdir(cache_dir):
         print("Cache dir not found!")
-        return
+        return 1
 
     cache_pages = os.path.join(cache_dir, "pages")
     cache_audio = os.path.join(cache_dir, "audio")
@@ -67,7 +67,7 @@ def convert_savefile() -> None:
     audio_file = input(f"Path to the file `{audio}` > ")
     if not os.path.isfile(audio_file):
         print("Audio file not found!")
-        return
+        return 1
     audio_name = audio_file.replace("\\", "/").split("/")[-1]
 
     with open(audio_file, "rb") as rf:
@@ -178,3 +178,4 @@ def convert_savefile() -> None:
         zip_dir(zfile, cache_dir)
 
     print("Converted LPC cover successfully!")
+    return 0

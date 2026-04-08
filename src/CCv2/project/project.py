@@ -25,7 +25,6 @@ from ..audio.track import AudioTrack
 from .. import logger
 from ..project.baking import BakedProject
 from ..ptypes import AudioRaw, int2
-from ..utils.json_wrapper import Json
 from ..utils.ui_property import UiProperty
 from ..lighting.keyframes import Keyframes
 
@@ -177,6 +176,9 @@ class Project:
     def apply_audio_fade(
         self, audio: np.ndarray, fade_in_ms: float = 10, fade_out_ms: float = 10
     ) -> AudioRaw:
+        if audio.shape[0] < constants.SAMPLE_RATE * max(fade_in_ms, fade_out_ms) / 1000:
+            return audio
+
         fade_in_samples: int = int(constants.SAMPLE_RATE * fade_in_ms / 1000)
         fade_out_samples: int = int(constants.SAMPLE_RATE * fade_out_ms / 1000)
 
@@ -198,17 +200,3 @@ class Project:
 
 
 Project.CURRENT_PROJECT = UiProperty(Project())
-
-
-class ProjDescription(Json):
-    @staticmethod
-    def loads(data: str | bytes | bytearray) -> "ProjDescription":
-        return ProjDescription(json.loads(data))
-
-    def __init__(self, obj: Any) -> None:
-        super().__init__(obj)
-
-        self.title: str = self.get_item("title", str)
-
-        pages = self.get("pages")
-        self.pages_buttons: list[int] = pages.get_item("buttons", list)

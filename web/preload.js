@@ -357,7 +357,12 @@ const setLaunchpad = (launchpadInfo) => {
 };
 
 const debugTransmit = () => {
-  apiSend({ type: $("debugtransmit").value });
+  const value = $("debugtransmit").value;
+
+  if (value.startsWith("{")) {
+    const msgs = value.split("|");
+    for (const m of msgs) ws.send(m);
+  } else apiSend({ type: $("debugtransmit").value });
 };
 
 const debugBake = () => apiSend({ type: "bake" });

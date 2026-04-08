@@ -25,7 +25,7 @@ from ..utils.versioning import VersionLoader
 from ..lighting.keyframes import Keyframes
 from .. import constants
 from .. import logger
-from ..project.project import ProjButton, ProjDescription, ProjLight, Project
+from ..project.project import ProjButton, ProjLight, Project
 
 
 class ProjectV1(VersionLoader[Project]):

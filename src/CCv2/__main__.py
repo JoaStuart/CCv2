@@ -33,7 +33,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser("CC/v2", description="CoverCreator version 2")
     for n, _ in SCRIPTS:
-        parser.add_argument(f"--{n}", action="store_true")
+        parser.add_argument(f"--{n}", nargs=argparse.REMAINDER)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--vpad", action="store_true")
     parser.add_argument("--audiodevice", type=str, required=False, default=None)
@@ -44,9 +44,8 @@ def main() -> None:
     logger.init(args.verbose)
 
     for name, script in SCRIPTS:
-        if getattr(args, name):
-            script()
-            sys.exit(0)
+        if script_args := getattr(args, name):
+            sys.exit(script(script_args))
 
     logger.debug("Clearing cache directory")
     Project.clear()

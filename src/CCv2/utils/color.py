@@ -269,3 +269,9 @@ class col:
         if isinstance(other, col):
             return self.r == other.r and self.g == other.g and self.b == other.b
         return False
+
+    def __hash__(self) -> int:
+        return hash(self.rgb)
+
+    def __repr__(self) -> str:
+        return str(self)

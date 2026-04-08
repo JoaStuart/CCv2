@@ -22,7 +22,7 @@ from ..lighting.lightmap import Lightmap
 from ..utils.color import col
 
 
-def create_lightmap() -> None:
+def create_lightmap(_args) -> int:
     name = input("Name of the new Lightmap: ")
 
     file = input("Where is the Kaskobi-Style palette stored?\n> ")
@@ -56,3 +56,5 @@ def create_lightmap() -> None:
     VersionLoader.register_all()
     with open(os.path.join(constants.LIGHTMAPS, name), "wb") as wf:
         wf.write(VersionLoader.dump_best(Lightmap, lm))
+
+    return 0
