@@ -14,12 +14,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import threading
+from typing import Optional
 
 from ..lighting.keyframes import Keyframes
 from ..lighting.lightmanager import KfData, LightManager
 
 
-def _play(anim: str) -> threading.Event:
+def play(anim: str) -> threading.Event:
     """Play keyframes in the background and return an event
     that gets triggered when finished playback
 
@@ -33,7 +34,7 @@ def _play(anim: str) -> threading.Event:
     return LightManager().play(anim)
 
 
-def _persistent(anim: str) -> threading.Event:
+def persistent(anim: str, event: Optional[threading.Event] = None) -> threading.Event:
     """Play a keyframe repeatedly until the returned event is set
 
     Args:
@@ -43,7 +44,7 @@ def _persistent(anim: str) -> threading.Event:
         threading.Event: The event to end the playback
     """
 
-    load_finish = threading.Event()
+    load_finish = threading.Event() if event is None else event
     LightManager().play_raw(KfData(Keyframes.FRAME_CACHE[anim].persistent(load_finish)))
     return load_finish
 
@@ -55,9 +56,9 @@ def load_animation() -> threading.Event:
         threading.Event: The event to stop the animation
     """
 
-    _play("__loading_entry").wait()
+    play("__loading_entry").wait()
 
-    return _persistent("__loading")
+    return persistent("__loading")
 
 
 def splash_animation() -> threading.Event:
@@ -67,6 +68,6 @@ def splash_animation() -> threading.Event:
         threading.Event: The event to stop the animation
     """
 
-    _play("__splash_entry").wait()
+    play("__splash_entry").wait()
 
-    return _persistent("__splash")
+    return persistent("__splash")

@@ -36,6 +36,7 @@ from jpyweb import (
     start,
 )
 
+from ..ui.launchpad_ui import LaunchpadUI
 from ..audio.track import AudioTrack
 from ..utils.data_uri import make_data_uri
 from ..utils.ffmpeg import ffmpeg_call
@@ -926,6 +927,8 @@ def open_and_run(splash_finish: threading.Event, args) -> None:
         stop()
 
     threading.Thread(target=browser, daemon=True, name="BrowserView").start()
+
+    LaunchpadUI.state_session()
 
     try:
         start(

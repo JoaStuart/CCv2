@@ -145,12 +145,12 @@ class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
         else:
             return rapid_num - 64 - 8, -1
 
-    def _rapid_velo_at(self, xy: int2, full_frame: dict[int2, col]) -> int:
+    def _rapid_velo_at(self, xy: int2, full_frame: dict[int2, tuple[int, col]]) -> int:
         if xy in self._message_map:
             vel = self._message_map[xy]
             del self._message_map[xy]
         else:
-            vel = self._lightmap.closest(full_frame.get(xy, col(0, 0, 0)))
+            vel = self._lightmap.closest(full_frame.get(xy, (0, col(0, 0, 0)))[1])
 
         return vel
 

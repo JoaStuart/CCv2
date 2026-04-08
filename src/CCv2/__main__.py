@@ -26,6 +26,7 @@ from . import logger
 from .project.project import Project
 from .scripts import SCRIPTS
 from .utils.animations import load_animation, splash_animation
+from .ui.launchpad_ui import LaunchpadUI
 
 
 def main() -> None:
@@ -57,6 +58,7 @@ def main() -> None:
     Keyframes.load_internal()
     Launchpad.open_all()
     Launchpad.broadcast_clear()
+    LaunchpadUI.statechange()
 
     # Load project
     if args.file:

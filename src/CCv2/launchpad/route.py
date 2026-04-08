@@ -16,6 +16,8 @@
 import abc
 from typing import TYPE_CHECKING, Optional
 
+from ..ui.launchpad_ui import LaunchpadUI
+
 if TYPE_CHECKING:
     from ..launchpad.base import LaunchpadIn
 
@@ -28,28 +30,20 @@ class LaunchpadRouter:
         from ..launchpad.base import Launchpad
 
         cnc = cmd & 0xF0
+        note = self._lp.midi_to_xy(a0, cmd)
+        notefin = self._lp.offset(note)
+
         if (cnc == Launchpad.NOTE_ON or cnc == Launchpad.CC_ON) and a1 > 0:
-            note = self._lp.midi_to_xy(a0, cmd)
             cx, cy = self._lp.clear_button()
             if note[0] == cx and note[1] == cy:
-                LaunchpadReceiver.route_clear()
+                LaunchpadUI.note_clear()
 
             if note[0] == 8 and note[1] >= 0:
                 Launchpad.PAGE.v = note[1]
 
-            note = (
-                note[0] + self._lp.offx,
-                note[1] + self._lp.offy,
-            )
-            self.note_on(*note, a1)
+            LaunchpadUI.note_on(*note, *notefin, a1)
         elif cnc == Launchpad.NOTE_OFF or a1 == 0:
-            self.note_off(*self._lp.midi_to_xy(a0, cmd))
-
-    def note_on(self, x: int, y: int, _: int) -> None:
-        LaunchpadReceiver.route_on(x, y)
-
-    def note_off(self, x: int, y: int) -> None:
-        LaunchpadReceiver.route_off(x, y)
+            LaunchpadUI.note_off(*note, *notefin)
 
 
 class LaunchpadReceiver(abc.ABC):

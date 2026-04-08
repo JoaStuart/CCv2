@@ -16,7 +16,7 @@
 import abc
 import threading
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from ..utils.daemon_thread import DaemonThread
 from ..launchpad.base import Launchpad
@@ -25,12 +25,25 @@ from ..ptypes import int2
 from ..singleton import singleton
 from ..utils.color import col
 
-type Kf = dict[int2, col]
+type Kf = dict[int2, tuple[int, col]]  # pos: (kftype, col)
+type KfNoType = dict[int2, col]
 
+
+DRAW_ALL = 3
+DRAW_KF = 2
+DRAW_UI = 1
+
+KFDATA_KF = DRAW_KF
+KFDATA_UI = DRAW_UI
 
 class KfData:
+
     def __init__(
-        self, frame: Keyframes, duration: Optional[float] = None, offset: int2 = (0, 0)
+        self,
+        frame: Keyframes,
+        duration: Optional[float] = None,
+        offset: int2 = (0, 0),
+        kftype: int = KFDATA_KF,
     ) -> None:
         self.frame = frame.copy()
         if duration:
@@ -39,9 +52,10 @@ class KfData:
         self.offset = offset
 
         self.next_wait = self.frame.next_wait
-        self.last = self.frame.last
-        self.next = self.frame.next
+        self.last: Callable[[], Optional[KfNoType]] = self.frame.last
+        self.next: Callable[[], Optional[KfNoType]] = self.frame.next
         self.static_after = self.frame.static_after
+        self.kftype = kftype
 
 
 @singleton
@@ -54,6 +68,8 @@ class LightManager(DaemonThread):
         self._static_launchpad: Kf = {}
         self._new_frame_notifier = threading.Event()
         self._receiver: list[LightReceiver] = []
+
+        self.draw_mask: int = DRAW_ALL
 
         super().__init__("LightManager")
 
@@ -81,19 +97,30 @@ class LightManager(DaemonThread):
         return finish_event
 
     def play_after(
-        self, t: float, kf: Keyframes, duration: float, offset: int2
+        self,
+        t: float,
+        kf: Keyframes,
+        duration: float,
+        offset: int2,
+        kftype: int = KFDATA_KF,
     ) -> threading.Event:
         if t <= 0:
             return self.play_raw(KfData(kf, duration, offset))
 
         e = threading.Event()
-        self._active_timers.append((time.time() + t, KfData(kf, duration, offset), e))
+        self._active_timers.append(
+            (time.time() + t, KfData(kf, duration, offset, kftype), e)
+        )
         self._new_frame_notifier.set()
 
         return e
 
     def play(
-        self, name: str, duration: Optional[float] = None, offset: int2 = (0, 0)
+        self,
+        name: str,
+        duration: Optional[float] = None,
+        offset: int2 = (0, 0),
+        kftype: int = KFDATA_KF,
     ) -> threading.Event:
         keyframes = Keyframes.FRAME_CACHE.get(name, None)
         if keyframes is None:
@@ -101,7 +128,7 @@ class LightManager(DaemonThread):
             sevent.set()
             return sevent
 
-        return self.play_raw(KfData(keyframes, duration, offset))
+        return self.play_raw(KfData(keyframes, duration, offset, kftype))
 
     def _get_shortest_wait(self) -> float:
         return min([d[0].next_wait() for d in self._active_frames], default=1)
@@ -165,13 +192,13 @@ class LightManager(DaemonThread):
                     for k, v in frame.items():
                         self._static_launchpad[
                             k[0] + kf.offset[0], k[1] + kf.offset[1]
-                        ] = v
+                        ] = (kf.kftype, v)
 
                 finished_frames.append((kf, end))
                 end.set()
                 continue
 
-            self._draw_frame(frame, kf.offset, next_screen)
+            self._draw_frame(frame, kf.kftype, kf.offset, next_screen)
 
     def _handle_static(self, next_screen: Kf) -> None:
         static_remove: list[int2] = []
@@ -186,7 +213,7 @@ class LightManager(DaemonThread):
         write_buffer: Kf = {}
         for k in self._current_launchpad.keys() | next_screen.keys():
             if self._current_launchpad.get(k, 0) != next_screen.get(k, 0):
-                write_buffer[k] = next_screen.get(k, col(0, 0, 0))
+                write_buffer[k] = next_screen.get(k, (DRAW_ALL, col(0, 0, 0)))
 
         return write_buffer
 
@@ -208,9 +235,11 @@ class LightManager(DaemonThread):
         self._broadcast_buffer(write_buffer)
         self._current_launchpad = next_screen
 
-    def _draw_frame(self, frame: Kf, offset: int2, next_screen: Kf) -> None:
+    def _draw_frame(
+        self, frame: KfNoType, kftype: int, offset: int2, next_screen: Kf
+    ) -> None:
         for p, v in frame.items():
-            next_screen[p[0] + offset[0], p[1] + offset[1]] = v
+            next_screen[p[0] + offset[0], p[1] + offset[1]] = (kftype, v)
 
     def add_light_receiver(self, receiver: "LightReceiver") -> None:
         self._receiver.append(receiver)
@@ -219,13 +248,20 @@ class LightManager(DaemonThread):
         if len(write_buffer) == 0:
             return
 
-        for pos, vel in write_buffer.items():
+        for pos, (kftype, vel) in write_buffer.items():
+            if self.draw_mask & kftype == 0:
+                continue
+
             Launchpad.broadcast_light(
-                Launchpad.NOTE_ON | Launchpad.LIGHT_STATIC, pos, vel
+                Launchpad.NOTE_ON | Launchpad.LIGHT_STATIC,
+                pos,
+                vel,
+                raw=kftype & DRAW_UI > 0,
             )
 
-            for r in self._receiver:
-                r[pos] = vel
+            if kftype & DRAW_KF > 0:
+                for r in self._receiver:
+                    r[pos] = vel
 
         Launchpad.broadcast_finish()
 

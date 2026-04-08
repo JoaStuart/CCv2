@@ -110,9 +110,9 @@ class Launchpad(abc.ABC):
             Launchpad._MIDI_OUT = rtmidi.MidiOut()  # type: ignore
 
     @staticmethod
-    def broadcast_light(cmd: int, pos: int2, color: col) -> None:
+    def broadcast_light(cmd: int, pos: int2, color: col, raw: bool = False) -> None:
         for o in Launchpad.OUTPUTS:
-            o.send_light(cmd, pos, color)
+            o.send_light(cmd, pos, color, raw=raw)
 
     @staticmethod
     def broadcast_clear() -> None:
@@ -127,9 +127,7 @@ class Launchpad(abc.ABC):
 
             else:
                 for d in data:
-                    o.send_light(
-                        Launchpad.NOTE_ON, (d[0] + o.offx, d[1] + o.offy), col(0, 0, 0)
-                    )
+                    o.send_light(Launchpad.NOTE_ON, d, col(0, 0, 0))
                 o.frame_finish()
 
     @staticmethod
@@ -183,6 +181,12 @@ class Launchpad(abc.ABC):
 
     def clear_message(self) -> Optional[list[int]]:
         return None
+
+    def offset(self, xy: int2) -> int2:
+        return (xy[0] + self.offx, xy[1] + self.offy)
+
+    def inoffset(self, xy: int2) -> int2:
+        return (xy[0] - self.offx, xy[1] - self.offy)
 
 
 class LaunchpadChecker(DaemonThread):
@@ -292,20 +296,28 @@ class LaunchpadOut(Launchpad):
             logger.error("Could not send midi message %s", str(data))
 
     def send_welcome_messages(self) -> None:
+        from ..lighting.lightmanager import DRAW_UI
+
         for m in self._welcome_messages():
             self.send(m)
 
         from ..lighting.lightmanager import LightManager
 
         kf = LightManager().get_active_view()
-        for pos, col in kf.items():
-            self.send_light(Launchpad.NOTE_ON, pos, col)
+        for pos, (kftype, color) in kf.items():
+            self.send_light(
+                Launchpad.NOTE_ON,
+                pos,
+                color,
+                raw=kftype & DRAW_UI > 0,
+            )
 
     def frame_finish(self) -> None:
         pass
 
-    def send_light(self, cmd: int, pos: int2, color: col) -> None:
-        pos = (pos[0] - self.offx, pos[1] - self.offy)
+    def send_light(self, cmd: int, pos: int2, color: col, raw: bool = False) -> None:
+        if not raw:
+            pos = self.inoffset(pos)
 
         if not self.check_bounds(pos):
             return
