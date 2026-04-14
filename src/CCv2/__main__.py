@@ -44,7 +44,7 @@ def main() -> None:
     logger.init(args.verbose)
 
     for name, script in SCRIPTS:
-        if script_args := getattr(args, name):
+        if (script_args := getattr(args, name)) is not None:
             sys.exit(script(script_args))
 
     logger.debug("Clearing cache directory")

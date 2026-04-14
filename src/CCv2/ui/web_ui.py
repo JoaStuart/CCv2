@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import asyncio
 import json
-import logging
 import os
 import socket
 import subprocess
@@ -22,19 +22,12 @@ import tempfile
 import threading
 import time
 import traceback
-from typing import Optional
-from jpyweb import (
-    WsControlCode,
-    static_route,
-    route,
-    stop,
-    ws,
-    HttpRequestData,
-    HttpResponseData,
-    HttpMethod,
-    WsData,
-    start,
-)
+from types import CoroutineType
+from typing import Any, Callable, Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
+import uvicorn
 
 from ..audio.track import AudioTrack
 from ..utils.data_uri import make_data_uri
@@ -56,21 +49,56 @@ from ..utils.animations import load_animation
 from ..project.project import Project
 from .. import constants
 
-static_route("/static", constants.STATIC_UI)
+
+class ConnectionManager:
+    def __init__(self):
+        self.active_connections: list[tuple[WebSocket, asyncio.Lock]] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append((websocket, asyncio.Lock()))
+
+    def disconnect(self, websocket: WebSocket):
+        idx = -1
+        for i, el in enumerate(self.active_connections):
+            if el[0] == websocket:
+                idx = i
+                break
+
+        if idx >= 0:
+            self.active_connections.pop(i)
+
+    async def broadcast_text(self, message: str):
+        for connection in self.active_connections:
+            async with connection[1]:
+                await connection[0].send_text(message)
+
+    async def broadcast_bytes(self, message: bytes):
+        for connection in self.active_connections:
+            async with connection[1]:
+                await connection[0].send_bytes(message)
 
 
-@route(HttpMethod.GET, "/")
-def root(req: HttpRequestData) -> HttpResponseData:
-    return HttpResponseData.move("/static/index.html")
+EVENT_LOOP = asyncio.new_event_loop()
+asyncio.set_event_loop(EVENT_LOOP)
 
 
-@route(HttpMethod.GET, "/lp")
-def launchpad(req: HttpRequestData) -> HttpResponseData:
-    return HttpResponseData.move("/static/launchpad.html")
+def WEBSRV_AWAIT(c: CoroutineType) -> None:
+    asyncio.run_coroutine_threadsafe(c, EVENT_LOOP)
 
 
-api = ws("/api/v1/full")
-lp = ws("/api/v1/lp")
+app = FastAPI()
+app.mount("/static", StaticFiles(directory=constants.STATIC_UI), name="static")
+
+
+@app.get("/", response_class=RedirectResponse)
+async def root():
+    return "/static/index.html"
+
+
+@app.get("/lp", response_class=RedirectResponse)
+async def launchpad():
+    return "/static/launchpad.html"
 
 
 def _proj() -> "Project":
@@ -273,13 +301,13 @@ def api_import_sound() -> None:
         proj.track.change()
 
 
-def api_response(req: WsData[str], data: dict) -> WsData:
-    return req.respond(WsControlCode.OP_TEXT, json.dumps({"type": "update"} | data))
+async def api_response(ws: WebSocket, data: dict):
+    await ws.send_text(json.dumps({"type": "update"} | data))
 
 
-def api_update(data: dict) -> None:
+async def api_update(data: dict) -> None:
     d = json.dumps({"type": "update"} | data)
-    api.broadcast(WsControlCode.OP_TEXT, d, None)
+    await fullws_manager.broadcast_text(d)
 
 
 def api_retransmit() -> dict:
@@ -362,45 +390,45 @@ def bttnchange_in_api(data):
     buttons.change()
 
 
-def timestamp_in_api(data):
+async def timestamp_in_api(data):
     CreateRoute().timestamp = data["time"]
-    api_update(timestamp_get())
+    await api_update(timestamp_get())
 
 
-def projtitle_in_api(data):
+async def projtitle_in_api(data):
     _proj().title = data["value"]
-    api_update(proj_get())
+    await api_update(proj_get())
 
 
-def route_in_api(data):
+async def route_in_api(data):
     sel_route = data["route"]
 
     for r in WEB_ROUTES:
         if r.frontend_applet() == sel_route:
             r.request()
 
-            api_update(route_get())
+            await api_update(route_get())
             return
 
     logger.error("No frontend route found %s!", sel_route)
 
 
-def gencol_in_api(data):
+async def gencol_in_api(data):
     (g := GenerateRoute()).velocity = data["vel"]
-    api_update(g.gencol_get() | g.gradient_get())
+    await api_update(g.gencol_get() | g.gradient_get())
 
 
-def lighttype_in_api(data):
+async def lighttype_in_api(data):
     (g := GenerateRoute()).light_type(data["light"])
-    api_update(g.lighttype_get() | g.gencol_get())
+    await api_update(g.lighttype_get() | g.gencol_get())
 
 
-def gradientremove_in_api(data):
+async def gradientremove_in_api(data):
     (g := GenerateRoute()).gradient_remove(data["idx"])
-    api_update(g.gradient_get())
+    await api_update(g.gradient_get())
 
 
-def lpoffset_in_api(data):
+async def lpoffset_in_api(data):
     lid = data["id"]
     offx = data["offx"]
     offy = data["offy"]
@@ -412,7 +440,7 @@ def lpoffset_in_api(data):
     o.offx = offx
     o.offy = offy
 
-    api_update(launchpad_get())
+    await api_update(launchpad_get())
 
 
 def bttnremove_in_api(data):
@@ -427,59 +455,95 @@ def lightremove_in_api(data):
     l.change()
 
 
-@api.text
-def wsapi(req: WsData[str]) -> WsData | None:
+fullws_manager = ConnectionManager()
+
+
+@app.websocket("/api/v1/full")
+async def wsapi(ws: WebSocket):
+    await fullws_manager.connect(ws)
+
     try:
-        data = json.loads(req.data)
-        if (t := data.get("type", None)) == None:
-            return
+        while True:
+            try:
+                data = json.loads(await ws.receive_text())
+                if (t := data.get("type", None)) == None:
+                    return
 
-        return {
-            "retransmit": lambda _: api_response(req, api_retransmit()),
-            "openproj": lambda _: threading.Thread(target=api_open_project).start(),
-            "newproj": newproj_in_api,
-            "saveproj": lambda _: threading.Thread(target=api_save_project).start(),
-            "saveasproj": lambda _: threading.Thread(
-                target=api_save_project_as
-            ).start(),
-            "getproj": lambda _: api_response(req, proj_get()),
-            "gettracks": lambda _: api_response(req, tracks_get()),
-            "getlighting": lambda _: api_response(req, lighting_get()),
-            "gettimestamps": lambda _: api_response(req, timestamps_get()),
-            "getkeyframes": lambda _: api_response(req, keyframes_get()),
-            "bake": lambda _: _proj().bake(),
-            "lpclick": lambda _: LaunchpadReceiver.route_click(data["x"], data["y"]),
-            "lightadd": lightadd_in_api,
-            "lightchange": lightchange_in_api,
-            "bttnchange": bttnchange_in_api,
-            "timestamp": timestamp_in_api,
-            "projtitle": projtitle_in_api,
-            "route": route_in_api,
-            "gencol": gencol_in_api,
-            "genaction": lambda _: GenerateRoute().action(data["action"]),
-            "genpreview": lambda _: GenerateRoute().preview(data["duration"]),
-            "gensave": lambda _: GenerateRoute().save(data["name"], data["duration"]),
-            "lighttype": lighttype_in_api,
-            "gradientremove": gradientremove_in_api,
-            "lpoffset": lpoffset_in_api,
-            "importsound": lambda _: api_import_sound(),
-            "bttnremove": bttnremove_in_api,
-            "lightremove": lightremove_in_api,
-        }.get(t, print)(data)
+                endpoints: dict[
+                    str, Callable[[Any], CoroutineType] | Callable[[Any], None]
+                ] = {
+                    "retransmit": lambda _: api_response(ws, api_retransmit()),
+                    "openproj": lambda _: threading.Thread(
+                        target=api_open_project
+                    ).start(),
+                    "newproj": lambda a: newproj_in_api(a),
+                    "saveproj": lambda _: threading.Thread(
+                        target=api_save_project
+                    ).start(),
+                    "saveasproj": lambda _: threading.Thread(
+                        target=api_save_project_as
+                    ).start(),
+                    "getproj": lambda _: api_response(ws, proj_get()),
+                    "gettracks": lambda _: api_response(ws, tracks_get()),
+                    "getlighting": lambda _: api_response(ws, lighting_get()),
+                    "gettimestamps": lambda _: api_response(ws, timestamps_get()),
+                    "getkeyframes": lambda _: api_response(ws, keyframes_get()),
+                    "bake": lambda _: _proj().bake(),
+                    "lpclick": lambda _: LaunchpadReceiver.route_click(
+                        data["x"], data["y"]
+                    ),
+                    "lightadd": lambda a: lightadd_in_api(a),
+                    "lightchange": lambda a: lightchange_in_api(a),
+                    "bttnchange": lambda a: bttnchange_in_api(a),
+                    "timestamp": lambda a: timestamp_in_api(a),
+                    "projtitle": lambda a: projtitle_in_api(a),
+                    "route": lambda a: route_in_api(a),
+                    "gencol": lambda a: gencol_in_api(a),
+                    "genaction": lambda _: GenerateRoute().action(data["action"]),
+                    "genpreview": lambda _: GenerateRoute().preview(data["duration"]),
+                    "gensave": lambda _: GenerateRoute().save(
+                        data["name"], data["duration"]
+                    ),
+                    "lighttype": lambda a: lighttype_in_api(a),
+                    "gradientremove": lambda a: gradientremove_in_api(a),
+                    "lpoffset": lambda a: lpoffset_in_api(a),
+                    "importsound": lambda _: api_import_sound(),
+                    "bttnremove": lambda a: bttnremove_in_api(a),
+                    "lightremove": lambda a: lightremove_in_api(a),
+                }
+                maybeawait = endpoints.get(t, print)(data)
+                if maybeawait is not None:
+                    await maybeawait
 
-    except:
-        logger.error("Failed handling full api endpoint\n%s", traceback.format_exc())
+            except WebSocketDisconnect as e:
+                raise e
+            except:
+                logger.error(
+                    "Failed handling full api endpoint\n%s", traceback.format_exc()
+                )
+    except WebSocketDisconnect:
+        fullws_manager.disconnect(ws)
 
 
-@lp.binary
-def lpapi(req: WsData[bytes]) -> WsData | None:
-    assert len(req.data) == 1
-    packed_pos = int.from_bytes(req.data)
-
-    LaunchpadReceiver.route_click((packed_pos >> 4) - 1, (packed_pos & 0xF) - 1)
+lpws_manager = ConnectionManager()
 
 
-def vpad_send_frame(frame: dict[str, int3]) -> None:
+@app.websocket("/api/v1/lp")
+async def lpapi(ws: WebSocket):
+    await lpws_manager.connect(ws)
+
+    try:
+        while True:
+            data = await ws.receive_bytes()
+            assert len(data) == 1
+            packed_pos = int.from_bytes(data)
+
+            LaunchpadReceiver.route_click((packed_pos >> 4) - 1, (packed_pos & 0xF) - 1)
+    except WebSocketDisconnect:
+        lpws_manager.disconnect(ws)
+
+
+async def vpad_send_frame(frame: dict[str, int3]) -> None:
     data: list[int] = []
     for pos, col in frame.items():
         x, y = map(int, pos.split(";", 1))
@@ -492,7 +556,7 @@ def vpad_send_frame(frame: dict[str, int3]) -> None:
         data.append(col[1])
         data.append(col[2])
 
-    lp.broadcast(WsControlCode.OP_BINARY, bytes(data), None)
+    await lpws_manager.broadcast_bytes(bytes(data))
 
 
 @singleton
@@ -509,12 +573,12 @@ class WebUiLightReceiver(LightReceiver):
 
     def finish(self) -> None:
         try:
-            api_update({"lightrecv": self._lpmap})
+            WEBSRV_AWAIT(api_update({"lightrecv": self._lpmap}))
         except:
             pass
 
         try:
-            vpad_send_frame(self._lpmap)
+            WEBSRV_AWAIT(vpad_send_frame(self._lpmap))
         except:
             pass
 
@@ -669,11 +733,11 @@ class GenerateRoute(LaunchpadReceiver):
     def action(self, action: str) -> None:
         if action == "clear":
             self.clear()
-            api_update(self.frames_get())
+            WEBSRV_AWAIT(api_update(self.frames_get()))
         elif action == "back":
             self._display_frame = max(self._display_frame - 1, 0)
             self._display_current()
-            api_update(self.frames_get())
+            WEBSRV_AWAIT(api_update(self.frames_get()))
         elif action == "next":
             self._display_frame += 1
 
@@ -689,7 +753,7 @@ class GenerateRoute(LaunchpadReceiver):
                         del self._active_gradients[xy]
 
             self._display_current()
-            api_update(self.frames_get())
+            WEBSRV_AWAIT(api_update(self.frames_get()))
 
     def _keyframes(self) -> Keyframes:
         kf = Keyframes()
@@ -719,10 +783,10 @@ class GenerateRoute(LaunchpadReceiver):
 
         Keyframes.FRAME_CACHE[name] = kf
         Keyframes.preview_request(name, kf)
-        api_update(keyframes_get())
+        WEBSRV_AWAIT(api_update(keyframes_get()))
 
         self.clear()
-        api_update(self.frames_get())
+        WEBSRV_AWAIT(api_update(self.frames_get()))
         _proj().bake()
 
     def frames_get(self) -> dict:
@@ -796,19 +860,21 @@ _ROUTE: _WebRoute = PlayRoute()
 
 
 def _proj_change_listeners(p: "Project") -> None:
-    p.track.add_listener(lambda _: api_update(tracks_get()))
-    p.lighting.add_listener(lambda _: api_update(lighting_get()))
-    p.timestamps.add_listener(lambda _: api_update(timestamps_get()))
+    p.track.add_listener(lambda _: WEBSRV_AWAIT(api_update(tracks_get())))
+    p.lighting.add_listener(lambda _: WEBSRV_AWAIT(api_update(lighting_get())))
+    p.timestamps.add_listener(lambda _: WEBSRV_AWAIT(api_update(timestamps_get())))
 
 
 def _proj_change(p: "Project"):
     _proj_change_listeners(p)
 
-    api_update(proj_get() | tracks_get() | lighting_get() | timestamps_get())
+    WEBSRV_AWAIT(
+        api_update(proj_get() | tracks_get() | lighting_get() | timestamps_get())
+    )
 
 
 def add_update_listeners() -> None:
-    Launchpad.PAGE.add_listener(lambda _: api_update(page_get()))
+    Launchpad.PAGE.add_listener(lambda _: WEBSRV_AWAIT(api_update(page_get())))
     Project.CURRENT_PROJECT.add_listener(_proj_change)
     _proj_change_listeners(_proj())
 
@@ -897,13 +963,23 @@ def browser_none(_: str, __: tuple[int, int], ___: bool) -> None:
 def open_and_run(splash_finish: threading.Event, args) -> None:
     add_update_listeners()
     LightManager().add_light_receiver(WebUiLightReceiver())
-    Keyframes.PREVIEW_COMPLETED = lambda n, v: api_update(kfpreview(n, v))
-    Keyframes.LOAD_COMPLETED = lambda _: api_update(keyframes_get())
+    Keyframes.PREVIEW_COMPLETED = lambda n, v: WEBSRV_AWAIT(api_update(kfpreview(n, v)))
+    Keyframes.LOAD_COMPLETED = lambda _: WEBSRV_AWAIT(api_update(keyframes_get()))
     _ROUTE.request()
 
     if args.vpad:
         hostaddr = socket.gethostbyname(socket.gethostname())
         logger.info("Starting VPad on http://%s:%d/lp", hostaddr, constants.WEBUI_PORT)
+
+    server = uvicorn.Server(
+        uvicorn.Config(
+            app=app,
+            host="0.0.0.0" if args.vpad else "127.0.0.1",
+            port=constants.WEBUI_PORT,
+            log_level="info" if args.verbose else "warning",
+            ws="websockets",
+        )
+    )
 
     def browser() -> None:
         time.sleep(0.1)
@@ -923,15 +999,13 @@ def open_and_run(splash_finish: threading.Event, args) -> None:
 
                 break
 
-        stop()
+        server.should_exit = True
 
     threading.Thread(target=browser, daemon=True, name="BrowserView").start()
 
     try:
-        start(
-            port=constants.WEBUI_PORT,
-            hostname="0.0.0.0" if args.vpad else "127.0.0.1",
-            log_level=logging.DEBUG,
-        )
+        EVENT_LOOP.run_until_complete(server.serve())
+        logger.info("Shut down webserver")
     except KeyboardInterrupt:
         pass
+    EVENT_LOOP.close()
