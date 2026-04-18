@@ -19,7 +19,7 @@ import time
 
 from ..utils.daemon_thread import DaemonThread
 from ..lighting.lightmanager import LightManager
-from ..ptypes import int2
+from ..ptypes import MidiOutputOpen, int2
 from ..utils.color import col
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
@@ -102,8 +102,8 @@ class LaunchpadClassicUpdater(DaemonThread):
 
 class LaunchpadClassicOut(LaunchpadClassic, LaunchpadOut):
 
-    def __init__(self, index: int, midiname: str) -> None:
-        super().__init__(index, midiname)
+    def __init__(self, mopen: MidiOutputOpen, midiname: str) -> None:
+        super().__init__(mopen, midiname)
 
         self._message_map: dict[int2, int] = {}
         self.next_update_at: float = 0

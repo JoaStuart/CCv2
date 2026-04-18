@@ -17,7 +17,7 @@
 from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
-class LaunchpadMk3Mini(Launchpad):
+class LaunchpadMk1Mini(Launchpad):
     @staticmethod
     def name_re() -> str:
         return r"Launchpad Mini MIDI"
@@ -75,9 +75,9 @@ class LaunchpadMk3Mini(Launchpad):
         ]
 
 
-class LaunchpadMk3MiniIn(LaunchpadMk3Mini, LaunchpadIn):
+class LaunchpadMk1MiniIn(LaunchpadMk1Mini, LaunchpadIn):
     pass
 
 
-class LaunchpadMk3MiniOut(LaunchpadMk3Mini, LaunchpadOut):
+class LaunchpadMk1MiniOut(LaunchpadMk1Mini, LaunchpadOut):
     pass

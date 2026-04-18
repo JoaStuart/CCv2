@@ -13,7 +13,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from typing import TYPE_CHECKING, Callable
 import numpy as np
+
+if TYPE_CHECKING:
+    from .launchpad.midiio import MidiInput, MidiOutput
 
 
 type int2 = tuple[int, int]
@@ -23,4 +27,7 @@ type int4 = tuple[int, int, int, int]
 
 type AudioRaw = np.ndarray[tuple[int, int], np.dtype[np.int16]]
 
-__all__ = ["int2", "int3", "int4", "AudioRaw"]
+
+type MidiCallback = Callable[[list[int]], None]
+type MidiInputOpen = "Callable[[MidiCallback], MidiInput]"
+type MidiOutputOpen = "Callable[[], MidiOutput]"

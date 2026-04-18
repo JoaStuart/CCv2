@@ -48,6 +48,7 @@ from ..utils.filedialog import select_file, select_save
 from ..utils.animations import load_animation
 from ..project.project import Project
 from .. import constants
+from ..launchpad.midiio import WebMidiMessage
 
 
 class ConnectionManager:
@@ -81,6 +82,10 @@ class ConnectionManager:
 
 EVENT_LOOP = asyncio.new_event_loop()
 asyncio.set_event_loop(EVENT_LOOP)
+
+
+def CHECK_WEBSRV() -> bool:
+    return not EVENT_LOOP.is_closed()
 
 
 def WEBSRV_AWAIT(c: CoroutineType) -> None:
@@ -456,6 +461,19 @@ def lightremove_in_api(data):
 
 
 fullws_manager = ConnectionManager()
+
+
+@app.websocket("/api/v1/remidi")
+async def remidi(ws: WebSocket):
+    await ws.accept()
+
+    try:
+        while True:
+            data = await ws.receive_bytes()
+            WebMidiMessage.parse_recv(data, ws)
+    except WebSocketDisconnect:
+        pass
+    WebMidiMessage.remove_ws(ws)
 
 
 @app.websocket("/api/v1/full")
@@ -971,13 +989,25 @@ def open_and_run(splash_finish: threading.Event, args) -> None:
         hostaddr = socket.gethostbyname(socket.gethostname())
         logger.info("Starting VPad on http://%s:%d/lp", hostaddr, constants.WEBUI_PORT)
 
+    confkw = {
+        "app": app,
+        "host": "0.0.0.0" if args.vpad else "127.0.0.1",
+        "log_level": "info" if args.verbose else "warning",
+        "ws": "websockets",
+        "headers": [("Permissions-Policy", "midi=*;")],
+    }
     server = uvicorn.Server(
         uvicorn.Config(
-            app=app,
-            host="0.0.0.0" if args.vpad else "127.0.0.1",
             port=constants.WEBUI_PORT,
-            log_level="info" if args.verbose else "warning",
-            ws="websockets",
+            **confkw,
+        )
+    )
+    httpsserver = uvicorn.Server(
+        uvicorn.Config(
+            port=constants.WEBUI_PORT + 1,
+            ssl_certfile=os.path.join(constants.ROOT, "cert.crt"),
+            ssl_keyfile=os.path.join(constants.ROOT, "priv.key"),
+            **confkw,
         )
     )
 
@@ -999,12 +1029,14 @@ def open_and_run(splash_finish: threading.Event, args) -> None:
 
                 break
 
-        server.should_exit = True
+        server.should_exit = httpsserver.should_exit = True
 
     threading.Thread(target=browser, daemon=True, name="BrowserView").start()
 
     try:
-        EVENT_LOOP.run_until_complete(server.serve())
+        EVENT_LOOP.run_until_complete(
+            asyncio.gather(server.serve(), httpsserver.serve())
+        )
         logger.info("Shut down webserver")
     except KeyboardInterrupt:
         pass

@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <style>
+      body {
+        width: 100vw;
+        height: 100vh;
+        position: absolute;
+        left: 0;
+        top: 0;
+        margin: 0;
+        overflow: hidden;
+      }
+      textarea {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        border: none;
+        border-radius: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea name="log" id="log" style="width: 100%; height: 100%"></textarea>
+
+    <script>
+      let ws = null;
+      let midi = null;
+      let wakeLock = null;
+      const openInputs = {};
+      const openOutputs = {};
+
+      async function requestWakeLock() {
+        try {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => {
+            wakeLock = null;
+          });
+        } catch (err) {
+          log(`Wake Lock request failed: ${err}`);
+        }
+      }
+
+      async function ensureWakeLock() {
+        if ("wakeLock" in navigator) await requestWakeLock();
+        else log(`Wake Lock API not supported`);
+      }
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") ensureWakeLock();
+      });
+
+      window.onerror = (a, b, c, d, e) => {
+        log(`Error: ${e}`);
+        log(`Message: ${a}`);
+        log(`File: ${b}:${c}`);
+
+        return true;
+      };
+
+      const wsOnMessage = (e) => {
+        const data = new Uint8Array(event.data);
+        if (data[0] == ord("R")) {
+          onReMidiMessage(data);
+        }
+      };
+
+      const onReMidiMessage = (data) => {
+        if (data[1] == 0) {
+          const io = data[2];
+          const port = data[3];
+          const name = String.fromCharCode(...data.slice(4));
+
+          if (io == ord("I")) openInputDevice(name, port);
+          else openOutputDevice(name, port);
+        } else if (data[1] == 1) {
+          const io = data[2];
+          const port = data[3];
+
+          if (io == ord("I")) {
+            log(`Close: IN${port}`);
+            openInputs[port].onmidimessage = () => {};
+            delete openInputs[port];
+          } else {
+            log(`Close: OUT${port}`);
+            delete openOutputs[port];
+          }
+        } else if (data[1] == 2) {
+          const port = data[2];
+          const mididata = data.slice(3);
+
+          const midiport = openOutputs[port];
+          if (midiport !== undefined) midiport.send(mididata);
+        }
+      };
+
+      const ord = (c) => c.charCodeAt(0);
+
+      const sendConnect = (io, name) => {
+        const arr = [ord("R"), 3, ord(io)];
+
+        for (const i in name) {
+          arr.push(name.charCodeAt(i));
+        }
+
+        ws.send(new Uint8Array(arr));
+      };
+
+      const sendDisconnect = (io, name) => {
+        const arr = [ord("R"), 4, ord(io)];
+
+        for (const i in name) {
+          arr.push(name.charCodeAt(i));
+        }
+
+        ws.send(new Uint8Array(arr));
+      };
+
+      const sendData = (port, data) => {
+        ws.send(new Uint8Array([ord("R"), 2, port, ...data]));
+      };
+
+      const uniqueName = (port) => port.id + ";" + port.name;
+
+      const LOG = document.getElementById("log");
+      const log = (msg) => {
+        LOG.value += msg + "\n";
+        LOG.scrollTop = LOG.scrollHeight;
+      };
+
+      const initMidi = async (callback) => {
+        if (!navigator.requestMIDIAccess) {
+          log("Request function not existing");
+          return null;
+        }
+
+        try {
+          midi = await navigator.requestMIDIAccess({ sysex: true });
+          log("MIDI ok");
+
+          ws = new WebSocket("/api/v1/remidi");
+          ws.binaryType = "arraybuffer";
+          ws.onmessage = wsOnMessage;
+          ws.onopen = callback;
+        } catch (err) {
+          log("Failed request");
+          log(err);
+          console.error(err);
+        }
+      };
+
+      const openInputDevice = (name, port) => {
+        log(`Open: ${name}`);
+        for (const input of midi.inputs.values()) {
+          if (uniqueName(input) != name) continue;
+
+          openInputs[port] = input;
+          input.onmidimessage = (event) => {
+            sendData(port, event.data);
+          };
+        }
+      };
+
+      const openOutputDevice = (name, port) => {
+        log(`Open: ${name}`);
+        for (const output of midi.outputs.values()) {
+          if (uniqueName(output) != name) continue;
+
+          openOutputs[port] = output;
+        }
+      };
+
+      const hasOpenedPort = (port) => {
+        for (const i of Object.keys(openInputs)) {
+          if (openInputs[i] == port) return true;
+        }
+
+        for (const o of Object.keys(openOutputs)) {
+          if (openOutputs[o] == port) return true;
+        }
+
+        return false;
+      };
+
+      const listDevices = () => {
+        for (const i of midi.inputs.values()) {
+          log(`Sending connect IN ${uniqueName(i)}`);
+          sendConnect("I", uniqueName(i));
+        }
+
+        for (const o of midi.outputs.values()) {
+          log(`Sending connect OUT ${uniqueName(o)}`);
+          sendConnect("O", uniqueName(o));
+        }
+      };
+
+      (async () => {
+        const callback = () => {
+          if (midi.outputs.length > 0 || midi.inputs.length > 0)
+            ensureWakeLock();
+          listDevices();
+
+          midi.onstatechange = (e) => {
+            const port = e.port;
+            const name = uniqueName(port);
+            const type = port.type[0].toUpperCase();
+
+            log(`${port.state} > ${name}`);
+
+            if (port.state == "connected") {
+              if (!hasOpenedPort(port)) sendConnect(type, name);
+
+              if (wakeLock === null) ensureWakeLock();
+            } else if (port.state == "disconnected") {
+              sendDisconnect(type, name);
+
+              if (type == "I") {
+                for (const k of Object.keys(openInputs)) {
+                  if (openInputs[k] == port) {
+                    delete openInputs[k];
+                    break;
+                  }
+                }
+              } else {
+                for (const k of Object.keys(openOutputs)) {
+                  if (openOutputs[k] == port) {
+                    delete openOutputs[k];
+                    break;
+                  }
+                }
+              }
+
+              if (
+                Object.keys(openInputs).length === 0 &&
+                Object.keys(openOutputs).length === 0 &&
+                wakeLock !== null
+              )
+                wakeLock.release();
+            }
+          };
+        };
+
+        await initMidi(callback);
+      })();
+    </script>
+  </body>
+</html>

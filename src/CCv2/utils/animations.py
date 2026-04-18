@@ -19,7 +19,7 @@ from ..lighting.keyframes import Keyframes
 from ..lighting.lightmanager import KfData, LightManager
 
 
-def _play(anim: str) -> threading.Event:
+def play(anim: str) -> threading.Event:
     """Play keyframes in the background and return an event
     that gets triggered when finished playback
 
@@ -55,7 +55,7 @@ def load_animation() -> threading.Event:
         threading.Event: The event to stop the animation
     """
 
-    _play("__loading_entry").wait()
+    play("__loading_entry").wait()
 
     return _persistent("__loading")
 
@@ -67,6 +67,6 @@ def splash_animation() -> threading.Event:
         threading.Event: The event to stop the animation
     """
 
-    _play("__splash_entry").wait()
+    play("__splash_entry").wait()
 
     return _persistent("__splash")
