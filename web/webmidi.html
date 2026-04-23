@@ -29,13 +29,128 @@
     <textarea name="log" id="log" style="width: 100%; height: 100%"></textarea>
 
     <script>
-      let ws = null;
+      let proto = null;
       let midi = null;
       let wakeLock = null;
       const openInputs = {};
       const openOutputs = {};
 
-      async function requestWakeLock() {
+      const STATE_PREINIT = 0;
+      const STATE_RUNNING = 1;
+      class ProtoRemidi {
+        constructor(ws) {
+          this.ws = ws;
+          this.prefix = ord("R");
+          this.state = STATE_PREINIT;
+          this.callback = () => {};
+        }
+
+        parse(data) {
+          if (this.state == STATE_PREINIT) this.$_parse_state_preinit(data);
+          else if (this.state == STATE_RUNNING)
+            this.$_parse_state_running(data);
+        }
+
+        $_buffer_startswith(data, name) {
+          if (data.length < name.length) return false;
+
+          for (const i in name) {
+            if (name.charCodeAt(i) != data.at(i)) return false;
+          }
+
+          return true;
+        }
+
+        $_parse_state_preinit(data) {
+          if (!this.$_buffer_startswith(data, "REMIDI")) return;
+
+          const ver_maj = data.at(6);
+          const ver_min = data.at(7);
+
+          if (ver_maj != 1 && ver_min != 0) {
+            console.error(
+              `No version found! Server reported version ${ver_maj}.${ver_min}`,
+            );
+            return;
+          }
+
+          this.state = STATE_RUNNING;
+          log("STATE_RUNNING")
+          this.callback();
+        }
+
+        $_parse_state_running(data) {
+          if (data.length < 1 || data.at(0) != this.prefix)
+            return;
+
+          if (data[1] == 0) {
+            const io = data[2];
+            const port = data[3];
+            const name = String.fromCharCode(...data.slice(4));
+
+            if (io == ord("I")) openInputDevice(name, port);
+            else openOutputDevice(name, port);
+          } else if (data[1] == 1) {
+            const io = data[2];
+            const port = data[3];
+
+            if (io == ord("I")) {
+              log(`Close: IN${port}`);
+              openInputs[port].onmidimessage = () => {};
+              delete openInputs[port];
+            } else {
+              log(`Close: OUT${port}`);
+              delete openOutputs[port];
+            }
+          } else if (data[1] == 2) {
+            const port = data[2];
+            const mididata = data.slice(3);
+
+            const midiport = openOutputs[port];
+            if (midiport !== undefined) midiport.send(mididata);
+            else log("ERR opened port not found!");
+          }
+        }
+
+        sendConnect(io, name) {
+          const arr = [this.prefix, 3, ord(io)];
+
+          for (const i in name) {
+            arr.push(name.charCodeAt(i));
+          }
+
+          this.ws.send(new Uint8Array(arr));
+        }
+
+        sendDisconnect(io, name) {
+          const arr = [this.prefix, 4, ord(io)];
+
+          for (const i in name) {
+            arr.push(name.charCodeAt(i));
+          }
+
+          this.ws.send(new Uint8Array(arr));
+        }
+
+        sendData(port, data) {
+          this.ws.send(new Uint8Array([this.prefix, 2, port, ...data]));
+        }
+
+        sendInit() {
+          const arr = [];
+          const name = "REMIDI";
+          for (const c in name) {
+            arr.push(name.charCodeAt(c));
+          }
+
+          // Version 1.0
+          arr.push(1, 0, this.prefix);
+
+          this.ws.send(new Uint8Array(arr));
+        }
+      }
+
+      const requestWakeLock = async () => {
         try {
           wakeLock = await navigator.wakeLock.request("screen");
           wakeLock.addEventListener("release", () => {
@@ -46,7 +161,7 @@
         }
       }
 
-      async function ensureWakeLock() {
+      const  ensureWakeLock = async () => {
         if ("wakeLock" in navigator) await requestWakeLock();
         else log(`Wake Lock API not supported`);
       }
@@ -63,69 +178,23 @@
         return true;
       };
 
-      const wsOnMessage = (e) => {
-        const data = new Uint8Array(event.data);
-        if (data[0] == ord("R")) {
-          onReMidiMessage(data);
-        }
-      };
-
-      const onReMidiMessage = (data) => {
-        if (data[1] == 0) {
-          const io = data[2];
-          const port = data[3];
-          const name = String.fromCharCode(...data.slice(4));
-
-          if (io == ord("I")) openInputDevice(name, port);
-          else openOutputDevice(name, port);
-        } else if (data[1] == 1) {
-          const io = data[2];
-          const port = data[3];
-
-          if (io == ord("I")) {
-            log(`Close: IN${port}`);
-            openInputs[port].onmidimessage = () => {};
-            delete openInputs[port];
-          } else {
-            log(`Close: OUT${port}`);
-            delete openOutputs[port];
-          }
-        } else if (data[1] == 2) {
-          const port = data[2];
-          const mididata = data.slice(3);
-
-          const midiport = openOutputs[port];
-          if (midiport !== undefined) midiport.send(mididata);
-        }
-      };
-
       const ord = (c) => c.charCodeAt(0);
+      const uniqueName = (port, seenCount) => port.id + ";" + port.name + ";" + seenCount;
 
-      const sendConnect = (io, name) => {
-        const arr = [ord("R"), 3, ord(io)];
+      const iterInputs = (callback) => iterPorts(callback, midi.inputs);
+      const iterOutputs = (callback) => iterPorts(callback, midi.outputs);
+      const iterPorts = (callback, ports) => {
+        const seenNames = {};
 
-        for (const i in name) {
-          arr.push(name.charCodeAt(i));
+        for (const i of ports.values()) {
+          const portname = i.name;
+          seenNames[portname] = (seenNames[portname] || 0) + 1;
+
+          const uniquename = uniqueName(i, seenNames[portname] - 1);
+
+          if (!callback(i, uniquename)) break;
         }
-
-        ws.send(new Uint8Array(arr));
       };
-
-      const sendDisconnect = (io, name) => {
-        const arr = [ord("R"), 4, ord(io)];
-
-        for (const i in name) {
-          arr.push(name.charCodeAt(i));
-        }
-
-        ws.send(new Uint8Array(arr));
-      };
-
-      const sendData = (port, data) => {
-        ws.send(new Uint8Array([ord("R"), 2, port, ...data]));
-      };
-
-      const uniqueName = (port) => port.id + ";" + port.name;
 
       const LOG = document.getElementById("log");
       const log = (msg) => {
@@ -143,9 +212,10 @@
           midi = await navigator.requestMIDIAccess({ sysex: true });
           log("MIDI ok");
 
-          ws = new WebSocket("/api/v1/remidi");
+          const ws = new WebSocket("/api/v1/remidi");
           ws.binaryType = "arraybuffer";
-          ws.onmessage = wsOnMessage;
+          proto = new ProtoRemidi(ws);
+          ws.onmessage = (e) => proto.parse(new Uint8Array(e.data));
           ws.onopen = callback;
         } catch (err) {
           log("Failed request");
@@ -154,25 +224,33 @@
         }
       };
 
-      const openInputDevice = (name, port) => {
-        log(`Open: ${name}`);
-        for (const input of midi.inputs.values()) {
-          if (uniqueName(input) != name) continue;
+      const openInputDevice = (reqname, port) => {
+        ensureWakeLock();
+        log(`Open: ${reqname}`);
+
+        iterInputs((input, name) => {
+          if (name != reqname) return true;
 
           openInputs[port] = input;
           input.onmidimessage = (event) => {
-            sendData(port, event.data);
+            proto.sendData(port, event.data);
           };
-        }
+          log("Found");
+          return false;
+        });
       };
 
-      const openOutputDevice = (name, port) => {
-        log(`Open: ${name}`);
-        for (const output of midi.outputs.values()) {
-          if (uniqueName(output) != name) continue;
+      const openOutputDevice = (reqname, port) => {
+        ensureWakeLock();
+        log(`Open: ${reqname}`);
+
+        iterOutputs((output, name) => {
+          if (name != reqname) return true;
 
           openOutputs[port] = output;
-        }
+          log("Found")
+          return false;
+        });
       };
 
       const hasOpenedPort = (port) => {
@@ -188,36 +266,50 @@
       };
 
       const listDevices = () => {
-        for (const i of midi.inputs.values()) {
-          log(`Sending connect IN ${uniqueName(i)}`);
-          sendConnect("I", uniqueName(i));
-        }
+        iterInputs((input, name) => {
+          log(`Sending connect IN ${name}`);
+          proto.sendConnect("I", name);
 
-        for (const o of midi.outputs.values()) {
-          log(`Sending connect OUT ${uniqueName(o)}`);
-          sendConnect("O", uniqueName(o));
-        }
+          return true;
+        });
+
+        iterOutputs((output, name) => {
+          log(`Sending connect OUT ${name}`);
+          proto.sendConnect("O", name);
+
+          return true;
+        })
       };
 
       (async () => {
-        const callback = () => {
-          if (midi.outputs.length > 0 || midi.inputs.length > 0)
-            ensureWakeLock();
+        const remidiInitCallback = () => {
           listDevices();
 
           midi.onstatechange = (e) => {
             const port = e.port;
-            const name = uniqueName(port);
             const type = port.type[0].toUpperCase();
-
-            log(`${port.state} > ${name}`);
+            const itr = type == "I" ? iterInputs : iterOutputs;
+            
+            log(`${port.state} > ${port.name}`);
 
             if (port.state == "connected") {
-              if (!hasOpenedPort(port)) sendConnect(type, name);
+              if (hasOpenedPort(port)) return;
+
+              itr((iport, name) => {
+                if (iport !== port) return true;
+
+                proto.sendConnect(type, name);
+                return false;
+              });
 
               if (wakeLock === null) ensureWakeLock();
+
             } else if (port.state == "disconnected") {
-              sendDisconnect(type, name);
+              itr((iport, name) => {
+                if (iport !== port) return true;
+
+                proto.sendDisconnect(type, name);
+              });
 
               if (type == "I") {
                 for (const k of Object.keys(openInputs)) {
@@ -245,7 +337,10 @@
           };
         };
 
-        await initMidi(callback);
+        await initMidi(() => {
+          proto.callback = remidiInitCallback;
+          proto.sendInit();
+        });
       })();
     </script>
   </body>

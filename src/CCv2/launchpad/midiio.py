@@ -131,55 +131,103 @@ class RtMidiOutput(MidiOutput):
 #
 
 
-class WebMidiMessage:
+class ProtoRemidi:
     OPEN = 0  # TX: R{OPEN}{I/O}{port}{name}
     CLOSE = 1  # TX: R{CLOSE}{I/O}{port}
     DATA = 2  # TX: R{DATA}{port}{data...}  |  RX: R{DATA}{port}{data...}
     CONNECT = 3  # RX: R{CONNECT}{I/O}{name}
     DISCONNECT = 4  # RX: R{DISCONNECT}{I/O}{name}
 
-    @staticmethod
-    def message_open(name: str, io: str, port: int) -> bytes:
-        return b"R" + bytes([WebMidiMessage.OPEN, ord(io), port]) + name.encode()
+    STATE_PREINIT = 0
+    STATE_RUNNING = 1
+
+    VERSION_SUPPORT = {
+        1: 0,
+    }
 
     @staticmethod
-    def message_close(port: int, io: str) -> bytes:
-        return b"R" + bytes([WebMidiMessage.CLOSE, ord(io), port])
+    def closest_supported_version(version: tuple[int, int]) -> tuple[int, int]:
+        if version[0] in ProtoRemidi.VERSION_SUPPORT:
+            return version[0], min(version[1], ProtoRemidi.VERSION_SUPPORT[version[0]])
 
-    @staticmethod
-    def message_data(port: int, *data: int) -> bytes:
-        return b"R" + bytes([WebMidiMessage.DATA, port, *data])
+        maj_list = list(ProtoRemidi.VERSION_SUPPORT.keys())
+        maj_list.sort(reverse=True)
 
-    @staticmethod
-    def parse_recv(data: bytes, ws: WebSocket) -> None:
-        if not data.startswith(b"R"):
+        return maj_list[0], ProtoRemidi.VERSION_SUPPORT[maj_list[0]]
+
+    def message_open(self, name: str, io: str, port: int) -> bytes:
+        return bytes([self._prefix, ProtoRemidi.OPEN, ord(io), port]) + name.encode()
+
+    def message_close(self, port: int, io: str) -> bytes:
+        return bytes([self._prefix, ProtoRemidi.CLOSE, ord(io), port])
+
+    def message_data(self, port: int, *data: int) -> bytes:
+        return bytes([self._prefix, ProtoRemidi.DATA, port, *data])
+
+    def __init__(self, ws: WebSocket) -> None:
+        self._ws = ws
+        self._state: int = ProtoRemidi.STATE_PREINIT
+
+        self._prefix: int  # Assigned during STATE_PREINIT
+        self._version: tuple[int, int]  # Assigned during STATE_PREINIT
+
+    @property
+    def state(self) -> int:
+        return self._state
+
+    def send(self, data: bytes) -> None:
+        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
+
+        if CHECK_WEBSRV():
+            WEBSRV_AWAIT(self._ws.send_bytes(data))
+
+    def parse(self, data: bytes) -> None:
+        if self.state == ProtoRemidi.STATE_PREINIT:
+            self._parse_state_preinit(data)
+        elif self.state == ProtoRemidi.STATE_RUNNING:
+            self._parse_state_running(data)
+
+    def _parse_state_preinit(self, data: bytes) -> None:
+        if not data.startswith(b"REMIDI"):
             return
 
-        if data[1] == WebMidiMessage.CONNECT:
-            if data[2] == ord("I"):
-                WebMidiInput.append_port(data[3:].decode(), ws)
-            else:
-                WebMidiOutput.append_port(data[3:].decode(), ws)
+        self._version = (data[6], data[7])
+        self._prefix = data[8]
 
-        elif data[1] == WebMidiMessage.DISCONNECT:
-            if data[2] == ord("I"):
-                WebMidiInput.remove_port(data[3:].decode(), ws)
-            else:
-                WebMidiOutput.remove_port(data[3:].decode(), ws)
+        support_ver, support_subver = self.closest_supported_version(self._version)
+        self.send(b"REMIDI" + bytes([support_ver, support_subver]))
 
-        elif data[1] == WebMidiMessage.DATA:
+        if self._version == (support_ver, support_subver):
+            self._state = ProtoRemidi.STATE_RUNNING
+
+    def _parse_state_running(self, data: bytes) -> None:
+        if len(data) < 1 or data[0] != self._prefix:
+            return
+
+        if data[1] == ProtoRemidi.CONNECT:
+            if data[2] == ord("I"):
+                WebMidiInput.append_port(data[3:].decode(), self)
+            else:
+                WebMidiOutput.append_port(data[3:].decode(), self)
+
+        elif data[1] == ProtoRemidi.DISCONNECT:
+            if data[2] == ord("I"):
+                WebMidiInput.remove_port(data[3:].decode(), self)
+            else:
+                WebMidiOutput.remove_port(data[3:].decode(), self)
+
+        elif data[1] == ProtoRemidi.DATA:
             for i in WebMidiInput.INSTANCES:
                 if i.port == data[2]:
                     i.callback(list(data[3:]))
 
-    @staticmethod
-    def remove_ws(ws: WebSocket) -> None:
-        WebMidiInput.remove_ws(ws)
-        WebMidiOutput.remove_ws(ws)
+    def close(self) -> None:
+        WebMidiInput.remove_ws(self)
+        WebMidiOutput.remove_ws(self)
 
 
 class WebMidiInput(MidiInput):
-    PORTS: dict[int, tuple[str, WebSocket]] = {}
+    PORTS: dict[int, tuple[str, ProtoRemidi]] = {}
     INSTANCES: "list[WebMidiInput]" = []
 
     @staticmethod
@@ -187,20 +235,20 @@ class WebMidiInput(MidiInput):
         return {i: p[0] for i, p in WebMidiInput.PORTS.items()}
 
     @staticmethod
-    def append_port(name: str, ws: WebSocket) -> None:
+    def append_port(name: str, proto: ProtoRemidi) -> None:
         maxid = -1
         for i, _ in WebMidiInput.PORTS.items():
             maxid = max(i, maxid)
 
         newid = maxid + 1
-        WebMidiInput.PORTS[newid] = (str(id(ws)) + ";" + name, ws)
+        WebMidiInput.PORTS[newid] = (str(id(proto)) + ";" + name, proto)
 
     @staticmethod
-    def remove_port(name: str, ws: WebSocket) -> None:
+    def remove_port(name: str, proto: ProtoRemidi) -> None:
         port = None
 
         for i, p in WebMidiInput.PORTS.items():
-            if str(id(ws)) + ";" + p[0] == name:
+            if str(id(proto)) + ";" + p[0] == name:
                 port = i
                 break
 
@@ -210,8 +258,8 @@ class WebMidiInput(MidiInput):
         del WebMidiInput.PORTS[port]
 
     @staticmethod
-    def remove_ws(ws: WebSocket) -> None:
-        wsid = str(id(ws)) + ";"
+    def remove_ws(proto: ProtoRemidi) -> None:
+        wsid = str(id(proto)) + ";"
 
         keys = list(WebMidiInput.PORTS.keys())
         keys.sort(reverse=True)
@@ -220,55 +268,46 @@ class WebMidiInput(MidiInput):
                 del WebMidiInput.PORTS[k]
 
     def __init__(self, port: int, callback: MidiCallback) -> None:
-        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
-
         super().__init__(port, callback)
 
-        _, self._ws = WebMidiInput.PORTS[port]
-        if self._ws.application_state == WebSocketState.CONNECTED and CHECK_WEBSRV():
-            WEBSRV_AWAIT(
-                self._ws.send_bytes(
-                    WebMidiMessage.message_open(
-                        WebMidiInput.PORTS[port][0].split(";", 1)[1],
-                        "I",
-                        port,
-                    )
-                )
+        _, self._proto = WebMidiInput.PORTS[port]
+        self._proto.send(
+            self._proto.message_open(
+                WebMidiInput.PORTS[port][0].split(";", 1)[1],
+                "I",
+                port,
             )
+        )
         WebMidiInput.INSTANCES.append(self)
 
     def close(self) -> None:
-        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
-
-        if self._ws.application_state == WebSocketState.CONNECTED and CHECK_WEBSRV():
-            WEBSRV_AWAIT(
-                self._ws.send_bytes(WebMidiMessage.message_close(self.port, "I"))
-            )
+        self._proto.send(self._proto.message_close(self.port, "I"))
         WebMidiInput.INSTANCES.remove(self)
 
 
 class WebMidiOutput(MidiOutput):
-    PORTS: dict[int, tuple[str, WebSocket]] = {}
+    PORTS: dict[int, tuple[str, ProtoRemidi]] = {}
+    INSTANCES: "list[WebMidiOutput]" = []
 
     @staticmethod
     def _ports() -> dict[int, str]:
         return {i: p[0] for i, p in WebMidiOutput.PORTS.items()}
 
     @staticmethod
-    def append_port(name: str, ws: WebSocket) -> None:
+    def append_port(name: str, proto: ProtoRemidi) -> None:
         maxid = -1
         for i, _ in WebMidiOutput.PORTS.items():
             maxid = max(i, maxid)
 
         newid = maxid + 1
-        WebMidiOutput.PORTS[newid] = (str(id(ws)) + ";" + name, ws)
+        WebMidiOutput.PORTS[newid] = (str(id(proto)) + ";" + name, proto)
 
     @staticmethod
-    def remove_port(name: str, ws: WebSocket) -> None:
+    def remove_port(name: str, proto: ProtoRemidi) -> None:
         port = None
 
         for i, p in WebMidiOutput.PORTS.items():
-            if str(id(ws)) + ";" + p[0] == name:
+            if str(id(proto)) + ";" + p[0] == name:
                 port = i
                 break
 
@@ -278,8 +317,8 @@ class WebMidiOutput(MidiOutput):
         del WebMidiOutput.PORTS[port]
 
     @staticmethod
-    def remove_ws(ws: WebSocket) -> None:
-        wsid = str(id(ws)) + ";"
+    def remove_ws(proto: ProtoRemidi) -> None:
+        wsid = str(id(proto)) + ";"
 
         keys = list(WebMidiOutput.PORTS.keys())
         keys.sort(reverse=True)
@@ -288,35 +327,20 @@ class WebMidiOutput(MidiOutput):
                 del WebMidiOutput.PORTS[k]
 
     def __init__(self, port: int) -> None:
-        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
-
         super().__init__(port)
 
-        _, self._ws = WebMidiInput.PORTS[port]
+        _, self._proto = WebMidiInput.PORTS[port]
 
-        if self._ws.application_state == WebSocketState.CONNECTED and CHECK_WEBSRV():
-            WEBSRV_AWAIT(
-                self._ws.send_bytes(
-                    WebMidiMessage.message_open(
-                        WebMidiOutput.PORTS[port][0].split(";", 1)[1],
-                        "O",
-                        port,
-                    )
-                )
+        self._proto.send(
+            self._proto.message_open(
+                WebMidiOutput.PORTS[port][0].split(";", 1)[1],
+                "O",
+                port,
             )
+        )
 
     def send(self, *data: int) -> None:
-        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
-
-        if self._ws.application_state == WebSocketState.CONNECTED and CHECK_WEBSRV():
-            WEBSRV_AWAIT(
-                self._ws.send_bytes(WebMidiMessage.message_data(self.port, *data))
-            )
+        self._proto.send(self._proto.message_data(self.port, *data))
 
     def close(self) -> None:
-        from ..ui.web_ui import WEBSRV_AWAIT, CHECK_WEBSRV
-
-        if self._ws.application_state == WebSocketState.CONNECTED and CHECK_WEBSRV():
-            WEBSRV_AWAIT(
-                self._ws.send_bytes(WebMidiMessage.message_close(self.port, "O"))
-            )
+        self._proto.send(self._proto.message_close(self.port, "O"))

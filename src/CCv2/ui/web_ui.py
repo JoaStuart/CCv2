@@ -48,7 +48,7 @@ from ..utils.filedialog import select_file, select_save
 from ..utils.animations import load_animation
 from ..project.project import Project
 from .. import constants
-from ..launchpad.midiio import WebMidiMessage
+from ..launchpad.midiio import ProtoRemidi
 
 
 class ConnectionManager:
@@ -466,14 +466,15 @@ fullws_manager = ConnectionManager()
 @app.websocket("/api/v1/remidi")
 async def remidi(ws: WebSocket):
     await ws.accept()
+    proto = ProtoRemidi(ws)
 
     try:
         while True:
-            data = await ws.receive_bytes()
-            WebMidiMessage.parse_recv(data, ws)
+            proto.parse(await ws.receive_bytes())
     except WebSocketDisconnect:
         pass
-    WebMidiMessage.remove_ws(ws)
+
+    proto.close()
 
 
 @app.websocket("/api/v1/full")

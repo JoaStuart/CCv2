@@ -16,7 +16,7 @@
 import abc
 import re
 import time
-from typing import Any, Callable, Optional
+from typing import Callable, Optional, TypeVar
 import rtmidi
 
 from CCv2.launchpad.midiio import MidiInput, MidiOutput
@@ -30,14 +30,18 @@ from ..utils.color import col
 from ..utils.ui_property import UiProperty
 
 
+_T = TypeVar("_T", bound="LaunchpadIn | LaunchpadOut")
+
+
 def register_adapters() -> None:
-    from . import lps
-    from . import mk2
-    from . import mk3pro
-    from . import lppro
-    from . import lpclassic
+    # from . import lps
+    # from . import mk2
+    # from . import mk3pro
+    # from . import lppro
+    # from . import lpclassic
     from . import mk3mini
-    from . import mk1mini
+
+    # from . import mk1mini
 
 
 class Launchpad(abc.ABC):
@@ -60,21 +64,66 @@ class Launchpad(abc.ABC):
         pass
 
     @staticmethod
+    @abc.abstractmethod
+    def dev_portidx() -> tuple[str, int, int]:
+        pass
+
+    @staticmethod
     def get_by_name_in(name: str) -> "Optional[type[LaunchpadIn]]":
         register_adapters()
 
-        for t in LaunchpadIn.__subclasses__():
-            if len(re.findall(t.name_re(), name)) > 0:
-                return t
-        return None
+        subclasses = LaunchpadIn.__subclasses__()
+        return Launchpad._get_name_normal(
+            name,
+            subclasses,
+        ) or Launchpad._get_name_portidx(
+            name,
+            subclasses,
+        )
 
     @staticmethod
     def get_by_name_out(name: str) -> "Optional[type[LaunchpadOut]]":
         register_adapters()
 
-        for t in LaunchpadOut.__subclasses__():
+        subclasses = LaunchpadOut.__subclasses__()
+        return Launchpad._get_name_normal(
+            name,
+            subclasses,
+        ) or Launchpad._get_name_portidx(
+            name,
+            subclasses,
+        )
+
+    @staticmethod
+    def _get_name_normal(name: str, subclasses: list[type[_T]]) -> "Optional[type[_T]]":
+        for t in subclasses:
             if len(re.findall(t.name_re(), name)) > 0:
                 return t
+        return None
+
+    @staticmethod
+    def _get_name_portidx(
+        name: str, subclasses: list[type[_T]]
+    ) -> "Optional[type[_T]]":
+        if ";" not in name:
+            return None
+
+        portparts = name.split(";")
+        if len(portparts) < 4:
+            return None
+
+        try:
+            nameidx = int(portparts[3])
+        except ValueError:
+            return None
+
+        for t in subclasses:
+            devname, portidx, porttotal = t.dev_portidx()
+
+            if len(re.findall(devname, name)) > 0:
+                if nameidx % porttotal == portidx:
+                    return t
+
         return None
 
     @staticmethod
