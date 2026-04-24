@@ -21,6 +21,10 @@ class LaunchpadMk2(Launchpad):
     def name_re() -> str:
         return r"Launchpad MK2"
 
+    @staticmethod
+    def dev_portidx() -> tuple[str, int, int]:
+        return "Launchpad MK2;", 0, 1
+
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:
             return (midi % 10) - 1, 8 - (midi // 10)

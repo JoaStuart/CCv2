@@ -22,6 +22,10 @@ class LaunchpadMk1Mini(Launchpad):
     def name_re() -> str:
         return r"Launchpad Mini MIDI"
 
+    @staticmethod
+    def dev_portidx() -> tuple[str, int, int]:
+        return "Launchpad Mini;", 0, 1
+
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:
             if midi >= 0x24 and midi <= 0x43:  # Left side notes

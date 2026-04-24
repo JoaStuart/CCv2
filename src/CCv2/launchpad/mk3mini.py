@@ -24,7 +24,7 @@ class LaunchpadMk3Mini(Launchpad):
 
     @staticmethod
     def dev_portidx() -> tuple[str, int, int]:
-        return "Launchpad Mini MK3", 1, 2
+        return "Launchpad Mini MK3;", 1, 2
 
     def midi_to_xy(self, midi: int, mode: int) -> tuple[int, int]:
         if mode <= self.NOTE_ON + 0xF:

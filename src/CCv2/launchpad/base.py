@@ -34,14 +34,13 @@ _T = TypeVar("_T", bound="LaunchpadIn | LaunchpadOut")
 
 
 def register_adapters() -> None:
-    # from . import lps
-    # from . import mk2
-    # from . import mk3pro
-    # from . import lppro
-    # from . import lpclassic
+    from . import lps
+    from . import mk2
+    from . import mk3pro
+    from . import lppro
+    from . import lpclassic
     from . import mk3mini
-
-    # from . import mk1mini
+    from . import mk1mini
 
 
 class Launchpad(abc.ABC):
