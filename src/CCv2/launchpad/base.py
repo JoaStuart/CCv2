@@ -35,7 +35,7 @@ def register_adapters() -> None:
     from . import lppro
     from . import lpclassic
     from . import mk3mini
-    from . import mk1mini
+    from . import lpmini
 
 
 class Launchpad(abc.ABC):

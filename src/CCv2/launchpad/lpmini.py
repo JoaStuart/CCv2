@@ -14,10 +14,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-from ..launchpad.base import Launchpad, LaunchpadIn, LaunchpadOut
+from .base import Launchpad, LaunchpadIn, LaunchpadOut
 
 
-class LaunchpadMk3Mini(Launchpad):
+class LaunchpadMini(Launchpad):
     @staticmethod
     def name_re() -> str:
         return r"Launchpad Mini MIDI"
@@ -75,9 +75,9 @@ class LaunchpadMk3Mini(Launchpad):
         ]
 
 
-class LaunchpadMk3MiniIn(LaunchpadMk3Mini, LaunchpadIn):
+class LaunchpadMiniIn(LaunchpadMini, LaunchpadIn):
     pass
 
 
-class LaunchpadMk3MiniOut(LaunchpadMk3Mini, LaunchpadOut):
+class LaunchpadMiniOut(LaunchpadMini, LaunchpadOut):
     pass

@@ -10,7 +10,7 @@
 | Launchpad S        |     | <small>NOVLPD02</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
 | Launchpad Pro      |     | <small>NOVLPD03</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
 | Launchpad Mini Mk1 |     | <small>NOVLPD05</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
-| Launchpad Mini Mk2 |     | <small>NOVLPD08</small> |     | ![Not yet](https://img.shields.io/badge/Not_yet-%239D3107)             |
+| Launchpad Mini Mk2 |     | <small>NOVLPD08</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
 | Launchpad Mk2      |     | <small>NOVLPD09</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
 | Launchpad Mini Mk3 |     | <small>NOVLPD11</small> |     | ![Supported](https://img.shields.io/badge/Supported-%23409D07)         |
 | Launchpad X        |     | <small>NOVLPD12</small> |     | ![Not yet](https://img.shields.io/badge/Not_yet-%239D3107)             |
